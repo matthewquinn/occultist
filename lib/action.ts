@@ -1,13 +1,13 @@
-import { STATUS_CODE } from '@std/http';
-import type { TypeDef, Context as JSONLDContext } from "../jsonld.ts";
+import { accepts, STATUS_CODE } from '@std/http';
+import type { JSONLDContext, TypeDef } from "../jsonld.ts";
 import type { Aliases, EmptyObject, JSONObject, Merge } from "./jsonld.ts";
 import { processAction } from "./processAction.ts";
+import type { ActionRegistry } from "./registry.ts";
 import type { Action, ActionCompatibility, ActionHTTPMethod, ActionPayload, ActionSpec, Context, ContextState, Middleware, NextFn, ParameterizedContext, ParameterizedMiddleware } from "./types.ts";
-import { makeResponse } from "./utils/makeResponse.ts";
-import { urlToIRI } from "./utils/urlToIRI.ts";
-import { accepts } from "@std/http";
 import { getActionContext } from "./utils/getActionContext.ts";
 import { getPropertyValueSpecifications } from "./utils/getPropertyValueSpecifications.ts";
+import { makeResponse } from "./utils/makeResponse.ts";
+import { urlToIRI } from "./utils/urlToIRI.ts";
 
 export function joinPaths(...paths: Array<string | number>): string {
   let fullPath: string = '';
@@ -82,6 +82,7 @@ export const FileExtension = {
 } as const;
 
 export type PreActionArgs = {
+  registry: ActionRegistry;
   rootIRI: string;
   name: string;
   method: ActionHTTPMethod;
@@ -176,6 +177,7 @@ export class PreAction<
   State extends ContextState = EmptyObject,
   OriginalState extends ContextState = State,
 > implements Action<OriginalState> {
+  #registry: ActionRegistry;
   #rootIRI: string;
   #name: string;
   #method: string;
@@ -204,6 +206,7 @@ export class PreAction<
   ;
 
   constructor(args: PreActionArgs) {
+    this.#registry = args.registry;
     this.#rootIRI = args.rootIRI;
     this.#name = args.name;
     this.#method = args.method.toUpperCase();
@@ -223,10 +226,6 @@ export class PreAction<
           `${args.urlPattern.pathname}:${this.#extensionParam}(\\.[a-z]+)?`,
       });
     }
-  }
-
-  static new<State extends ContextState = EmptyObject>(args: PreActionArgs) {
-    return new PreAction<State>(args);
   }
 
   get child() {
@@ -373,7 +372,7 @@ export class PreAction<
 
     this.#middleware.push(middleware);
 
-    const postAction = PostAction.new<
+    const postAction = new PostAction<
       Term,
       Compatibility,
       MergedState,
@@ -426,7 +425,7 @@ export class PreAction<
       throw new Error(`Action ${this.name} handler incorrectly configured.`);
     }
 
-    const post = PostAction.new<
+    const post = new PostAction<
       string,
       ActionCompatibility,
       State,
@@ -437,7 +436,7 @@ export class PreAction<
       expose: false,
     });
 
-    const typed = TypedAction.new<
+    const typed = new TypedAction<
       string,
       ActionCompatibility,
       State,
@@ -466,6 +465,7 @@ export class PreAction<
 
     if (typed) {
       let handled: boolean = false;
+
       for (const [contentTypes, handler] of typed.handlers) {
         if (contentTypes.includes(ctx.contentType)) {
           handled = true;
@@ -473,7 +473,7 @@ export class PreAction<
           const upstream = next;
 
           next = async () => {
-            await handler(ctx, upstream);
+            await handler(ctx as ParameterizedContext<OriginalState>, upstream);
 
             ctx.headers.set('content-type', ctx.contentType);
           };
@@ -501,7 +501,7 @@ export class PreAction<
       const upstream = next;
 
       next = async () => {
-        await middleware(ctx, upstream);
+        await middleware(ctx as ParameterizedContext<OriginalState>, upstream);
       };
     }
 
@@ -546,6 +546,7 @@ export class PreAction<
       method: req.method as ActionHTTPMethod,
       req,
       state,
+      registry: this.#registry,
       contentType: '',
       headers: new Headers(),
       bodySerialized: false,
@@ -582,7 +583,7 @@ export class PreAction<
 
           next = async () => {
             try {
-              await handler(ctx, upstream);
+              await handler(ctx as ParameterizedContext<OriginalState>, upstream);
 
               if (typeof ctx.status !== 'number') {
                 ctx.status = STATUS_CODE.OK;
@@ -609,7 +610,7 @@ export class PreAction<
         const upstream = next;
 
         next = async () => {
-          await middleware(ctx, upstream);
+          await middleware(ctx as ParameterizedContext<OriginalState>, upstream);
         };
       }
     }
@@ -618,7 +619,7 @@ export class PreAction<
       const upstream = next;
 
       next = async () => {
-        await middleware(ctx, upstream);
+        await middleware(ctx as ParameterizedContext<OriginalState>, upstream);
       };
     }
 
@@ -654,19 +655,6 @@ export class PostAction<
     this.#vocab = args.vocab;
     this.#aliases = args.aliases;
     this.#spec = args.spec || ({} as Spec);
-  }
-
-  static new<
-    // deno-lint-ignore no-explicit-any
-    Term extends string = any,
-    Compatibility extends ActionCompatibility = ActionCompatibility,
-    State extends ContextState = ContextState,
-    Spec extends ActionSpec<ContextState> = ActionSpec<ContextState>,
-    OriginalState extends ContextState = ContextState,
-  >(args: PostActionArgs<Term, ActionCompatibility, State, Spec>) {
-    return new PostAction<Term, Compatibility, State, Spec, OriginalState>(
-      args,
-    );
   }
 
   get parent() {
@@ -881,7 +869,7 @@ export class PostAction<
       throw new Error(`Action ${this.name} handler incorrectly configured.`);
     }
 
-    const typed = TypedAction.new<
+    const typed = new TypedAction<
       Term,
       Compatibility,
       State,
@@ -943,19 +931,6 @@ export class TypedAction<
     if (args.contentTypes) {
       this.#handlers.push([args.contentTypes, args.defaultHandler]);
     }
-  }
-
-  static new<
-    // deno-lint-ignore no-explicit-any
-    Term extends string = any,
-    Compatibility extends ActionCompatibility = ActionCompatibility,
-    State extends ContextState = ContextState,
-    Spec extends ActionSpec<ContextState> = ActionSpec<ContextState>,
-    OriginalState extends ContextState = ContextState,
-  >(args: TypedActionArgs<Term, Compatibility, State, Spec, OriginalState>) {
-    return new TypedAction<Term, Compatibility, State, Spec, OriginalState>(
-      args,
-    );
   }
 
   get parent() {

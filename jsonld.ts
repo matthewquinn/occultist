@@ -10,11 +10,11 @@ export type ContextDefinition = {
   '@id'?: string;
   '@type'?: ContextDefinitionType;
   '@container'?: ContextDefinitionContainer;
-  '@context'?: Context;
+  '@context'?: JSONLDContext;
   '@protected'?: boolean;
 };
 
-export type Context = {
+export type JSONLDContext = {
   '@version'?: ContextVersion;
   '@base'?: string;
   '@protected'?: boolean;

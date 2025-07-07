@@ -1,5 +1,6 @@
 import type { ContextDefinitionContainer, TypeDef, ContextDefinition } from "../jsonld.ts";
 import { joinPaths } from "./action.ts";
+import { JSONLDContext } from "./jsonld.ts";
 import type { Context } from "./types.ts";
 import { isPopulatedObject } from "./utils/isPopulatedObject.ts";
 import { isPopulatedString } from "./utils/isPopulatedString.ts";
@@ -81,7 +82,7 @@ export function makeTypeDef<Term extends string, TypeOrSchema extends string>(
     }
 
     if (isPopulatedObject(args.context)) {
-      contextDefinition['@context'] = args.context;
+      contextDefinition['@context'] = args.context as JSONLDContext;
     }
 
     if (protect) {

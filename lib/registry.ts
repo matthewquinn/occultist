@@ -216,7 +216,8 @@ export class ActionRegistry<const State extends ContextState = EmptyObject> {
       ? args.useFileExtensions
       : this.#useFileExtensions;
 
-    const action = PreAction.new<State>({
+    const action = new PreAction<State>({
+      registry: this,
       rootIRI,
       vocab: this.#vocab,
       aliases: this.#aliases,
