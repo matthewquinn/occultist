@@ -1,6 +1,5 @@
 import { accepts, STATUS_CODE } from '@std/http';
-import type { JSONLDContext, TypeDef } from "../jsonld.ts";
-import type { Aliases, EmptyObject, JSONObject, Merge } from "./jsonld.ts";
+import type { Aliases, EmptyObject, JSONLDContext, JSONObject, Merge, TypeDef } from "./jsonld.ts";
 import { processAction } from "./processAction.ts";
 import type { ActionRegistry } from "./registry.ts";
 import type { Action, ActionCompatibility, ActionHTTPMethod, ActionPayload, ActionSpec, Context, ContextState, Middleware, NextFn, ParameterizedContext, ParameterizedMiddleware } from "./types.ts";
@@ -228,51 +227,55 @@ export class PreAction<
     }
   }
 
-  get child() {
+  get registry(): ActionRegistry {
+    return this.#registry;
+  }
+
+  get child(): PostAction | TypedAction | undefined {
     return this.#child;
   }
 
-  get rootIRI() {
+  get rootIRI(): string {
     return this.#rootIRI;
   }
 
-  get actionIRI() {
+  get actionIRI(): string {
     return joinPaths(this.#rootIRI, this.actionPathPrefix, this.#name);
   }
 
-  get name() {
+  get name(): string {
     return this.#name;
   }
 
-  get method() {
+  get method(): string {
     return this.#method;
   }
 
-  get urlPattern() {
+  get urlPattern(): URLPattern {
     return this.#urlPattern;
   }
 
-  get actionPathPrefix() {
+  get actionPathPrefix(): string {
     return this.#actionPathPrefix;
   }
 
-  get expose() {
+  get expose(): boolean {
     return this.#expose;
   }
 
-  get strict() {
+  get strict(): boolean {
     return this.#strict;
   }
 
-  get term() {
+  get term(): string | undefined {
     return this.#typeDef?.term;
   }
 
-  get type() {
+  get type(): string | undefined {
     return this.#typeDef?.type;
   }
 
-  get typeDef() {
+  get typeDef(): TypeDef | undefined {
     return this.#typeDef;
   }
 
@@ -284,7 +287,7 @@ export class PreAction<
     return undefined;
   }
 
-  public partial() {
+  public partial(): JSONObject | undefined {
     if (!this.#child) {
       return undefined;
     }
@@ -300,7 +303,7 @@ export class PreAction<
     return this.#child.body();
   }
 
-  get contentTypes() {
+  get contentTypes(): string[] {
     if (this.child) {
       return this.child.contentTypes;
     }
@@ -316,7 +319,10 @@ export class PreAction<
     const MiddlewareState extends ContextState = ContextState,
   >(
     middleware: Middleware<MiddlewareState>,
-  ) {
+  ): PreAction<
+    Merge<MiddlewareState, State>,
+    OriginalState
+  > {
     this.#middleware.push(middleware);
 
     return this as unknown as PreAction<
@@ -331,7 +337,13 @@ export class PreAction<
     const Compatibility extends ActionCompatibility = ActionCompatibility,
     const Spec extends ActionSpec<ContextState> = ActionSpec<ContextState>,
     const MergedState extends ContextState = Merge<State,EmptyObject>,
-  >(args: DefineArgs<Term, Compatibility, State, Spec> = {}) {
+  >(args: DefineArgs<Term, Compatibility, State, Spec> = {}): PostAction<
+    Term,
+    Compatibility,
+    MergedState,
+    Spec,
+    OriginalState
+  > {
     this.#expose = args.expose || true;
     this.#strict = args.strict || true;
     this.#vocab = args.vocab || this.#vocab;
@@ -404,7 +416,13 @@ export class PreAction<
   public handle(
     arg1: string | string[] | Middleware<State>,
     arg2?: Middleware<State>,
-  ) {
+  ): TypedAction<
+    string,
+    ActionCompatibility,
+    State,
+    EmptyObject,
+    OriginalState
+  > {
     let defaultContentType = '*/*';
     let defaultHandler: Middleware<State> | undefined;
     let contentTypes: string[] | undefined;
@@ -657,7 +675,14 @@ export class PostAction<
     this.#spec = args.spec || ({} as Spec);
   }
 
-  get parent() {
+  get registry(): ActionRegistry {
+    return this.#parent.registry;
+  }
+  
+  get parent(): PreAction<
+    State,
+    OriginalState
+  > {
     return this.#parent;
   }
 
@@ -787,14 +812,14 @@ export class PostAction<
     return joinPaths(this.rootIRI, urlTemplate);
   }
 
-  public partial() {
+  public partial(): JSONObject {
     return {
       '@id': joinPaths(this.rootIRI, this.actionPathPrefix, this.name),
       '@type': this.term,
     };
   }
 
-  public async body() {
+  public async body(): Promise<JSONObject> {
     const apiSpec = await getPropertyValueSpecifications(this.#spec);
 
     return {
@@ -818,7 +843,13 @@ export class PostAction<
       MiddlewareState,
       Spec
     >,
-  ) {
+  ): PostAction<
+    Term,
+    Compatibility,
+    Merge<MiddlewareState, State>,
+    Spec,
+    OriginalState
+  > {
     this.#middleware.push(middleware);
 
     return this as unknown as PostAction<
@@ -848,7 +879,13 @@ export class PostAction<
   public handle(
     arg1: string | string[] | ParameterizedMiddleware<State, Spec>,
     arg2?: ParameterizedMiddleware<State, Spec>,
-  ) {
+  ): TypedAction<
+    Term,
+    Compatibility,
+    State,
+    Spec,
+    OriginalState
+  > {
     let defaultContentType = '*/*';
     let defaultHandler: ParameterizedMiddleware<State, Spec> | undefined;
     let contentTypes: string[] | undefined;
@@ -896,7 +933,7 @@ export class PostAction<
     return this.parent.handleRequest(req, state);
   }
 
-  public handleContext(ctx: Context<OriginalState>) {
+  public handleContext(ctx: Context<OriginalState>): Promise<void> {
     return this.parent.handleContext(ctx);
   }
 
@@ -933,43 +970,53 @@ export class TypedAction<
     }
   }
 
-  get parent() {
+  get registry(): ActionRegistry {
+    return this.#parent.registry;
+  }
+
+  get parent(): PostAction<
+    Term,
+    Compatibility,
+    State,
+    Spec,
+    OriginalState
+  > {
     return this.#parent;
   }
 
-  get actionIRI() {
+  get actionIRI(): string {
     return this.parent.actionIRI;
   }
 
-  get rootIRI() {
+  get rootIRI(): string {
     return this.parent.rootIRI;
   }
 
-  get name() {
+  get name(): string {
     return this.parent.name;
   }
 
-  get method() {
+  get method(): string {
     return this.parent.method;
   }
 
-  get urlPattern() {
+  get urlPattern(): URLPattern {
     return this.parent.urlPattern;
   }
 
-  get expose() {
+  get expose(): boolean {
     return this.#parent.expose;
   }
 
-  get strict() {
+  get strict(): boolean {
     return this.#parent.strict;
   }
 
-  get actionPathPrefix() {
+  get actionPathPrefix(): string {
     return this.parent.actionPathPrefix;
   }
 
-  get spec() {
+  get spec(): Spec {
     return this.parent.spec;
   }
 
@@ -980,7 +1027,7 @@ export class TypedAction<
     ];
   }
 
-  get middleware() {
+  get middleware(): Array<ParameterizedMiddleware<State, Spec>> {
     return this.parent.middleware;
   }
 
@@ -991,7 +1038,7 @@ export class TypedAction<
     ];
   }
 
-  get context() {
+  get context(): JSONLDContext {
     return this.#parent.context;
   }
 
@@ -1009,7 +1056,13 @@ export class TypedAction<
       State,
       Spec
     >,
-  ) {
+  ): TypedAction<
+      Term,
+      Compatibility,
+      State,
+      Spec,
+      OriginalState
+    > {
     if (typeof contentType === 'string') {
       this.#handlers.push([[contentType], middleware]);
     } else {
@@ -1059,7 +1112,7 @@ export class TypedAction<
     return this.parent.handleRequest(req, state);
   }
 
-  public handleContext(ctx: Context<OriginalState>) {
+  public handleContext(ctx: Context<OriginalState>): Promise<void> {
     return this.parent.handleContext(ctx);
   }
 

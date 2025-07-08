@@ -48,12 +48,6 @@ export class ActionRegistry<const State extends ContextState = EmptyObject> {
     });
   }
 
-  static new<State extends ContextState = EmptyObject>(
-    args: ActionRegistryArgs,
-  ) {
-    return new ActionRegistry<State>(args);
-  }
-
   public use<MiddlewareState extends ContextState = State>(
     middleware: Middleware<MiddlewareState>,
   ): ActionRegistry<Merge<State, MiddlewareState>> {
@@ -82,27 +76,23 @@ export class ActionRegistry<const State extends ContextState = EmptyObject> {
     return this.#aliases;
   }
 
-  public head(name: string, path: string, args?: RouteArgs) {
-    return this.#callMethod<'head'>('head', name, path, args);
-  }
-
-  public get(name: string, path: string, args?: RouteArgs) {
+  public get(name: string, path: string, args?: RouteArgs): PreAction<State> {
     return this.#callMethod<'get'>('get', name, path, args);
   }
 
-  public post(name: string, path: string, args?: RouteArgs) {
+  public post(name: string, path: string, args?: RouteArgs): PreAction<State> {
     return this.#callMethod<'post'>('post', name, path, args);
   }
 
-  public put(name: string, path: string, args?: RouteArgs) {
+  public put(name: string, path: string, args?: RouteArgs): PreAction<State> {
     return this.#callMethod<'put'>('put', name, path, args);
   }
 
-  public delete(name: string, path: string, args?: RouteArgs) {
+  public delete(name: string, path: string, args?: RouteArgs): PreAction<State> {
     return this.#callMethod<'delete'>('delete', name, path, args);
   }
 
-  public body() {
+  public body(): JSONObject {
     const body: JSONObject = {
       '@id': joinPaths(this.#rootIRI, this.#urlPattern.pathname),
     };
@@ -138,7 +128,7 @@ export class ActionRegistry<const State extends ContextState = EmptyObject> {
     }
   }
 
-  public async handleRequest(req: Request) {
+  public async handleRequest(req: Request): Promise<Response> {
     const method = req.method as ActionHTTPMethod;
     const iri = urlToIRI(req.url, this.#rootIRI);
     const state = {};
@@ -208,7 +198,7 @@ export class ActionRegistry<const State extends ContextState = EmptyObject> {
     name: string,
     path: string,
     args: RouteArgs = {},
-  ) {
+  ): PreAction<State> {
     const rootIRI = this.#rootIRI;
     const actionPathPrefix = this.#urlPattern.pathname;
     const urlPattern = new URLPattern(rootIRI + path);
@@ -217,7 +207,7 @@ export class ActionRegistry<const State extends ContextState = EmptyObject> {
       : this.#useFileExtensions;
 
     const action = new PreAction<State>({
-      registry: this,
+      registry: this as unknown as ActionRegistry<EmptyObject>,
       rootIRI,
       vocab: this.#vocab,
       aliases: this.#aliases,

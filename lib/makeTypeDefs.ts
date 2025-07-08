@@ -1,6 +1,5 @@
-import type { ContextDefinitionContainer, TypeDef, ContextDefinition } from "../jsonld.ts";
 import { joinPaths } from "./action.ts";
-import { JSONLDContext } from "./jsonld.ts";
+import type { ContextDefinition, ContextDefinitionContainer, JSONLDContext, TypeDef } from "./jsonld.ts";
 import type { Context } from "./types.ts";
 import { isPopulatedObject } from "./utils/isPopulatedObject.ts";
 import { isPopulatedString } from "./utils/isPopulatedString.ts";
@@ -125,7 +124,7 @@ export function makeTypeDef<Term extends string, TypeOrSchema extends string>(
 
 export function makeTypeDefs<Term extends string, TD extends TypeDef<Term>>(
   typeDefs: Readonly<Array<TD>>,
-) {
+): { [TypeDef in TD as TypeDef['term']]: TypeDef } {
   type TypeDefs = { [TypeDef in TD as TypeDef['term']]: TypeDef };
   const result = typeDefs.reduce(
     (acc, typeDef) => ({

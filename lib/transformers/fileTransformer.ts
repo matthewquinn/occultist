@@ -1,5 +1,5 @@
+import type { FileData, FileInput } from "../types.ts";
 import { Buffer } from 'node:buffer';
-import { FileData, FileInput } from "../types.ts";
 
 export class DataURLPart implements FileData {
 
@@ -11,7 +11,7 @@ export class DataURLPart implements FileData {
     this.#data = new Uint8Array(Buffer.from(dataURL, 'base64url'));
   }
   
-  async *[Symbol.asyncIterator]() {
+  async *[Symbol.asyncIterator](): AsyncGenerator<Uint8Array<ArrayBufferLike>> {
     yield this.#data;    
   }
 
