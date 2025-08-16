@@ -32,7 +32,7 @@ export async function getRequestBodyValues<
 }): Promise<RequestBodyResult> {
   let bodyValues: BodyValue = {};
 
-  if (!['POST' , 'PUT'].includes(req.method.toUpperCase())) {
+  if (!['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase())) {
     return { bodyValues: {} };
   }
 
@@ -56,7 +56,7 @@ export async function getRequestBodyValues<
     // into the compact terms for each type.
     // otherwise json requests would need to also need to use
     // expanded terms.
-    
+
     for await (const part of streamParts(req)) {
       if (typeof part.name !== 'string') {
         throw new ProblemDetailsError(STATUS_CODE.BadRequest, {
@@ -84,7 +84,7 @@ export async function getRequestBodyValues<
         bodyValues[term] = part;
         continue;
       }
-      
+
       if (part.type === ContentType.TextPlain || !part.type) {
         term = mappedTypes[part.name].term;
         propertySpec = mappedTypes[part.name].propertySpec;
@@ -106,7 +106,7 @@ export async function getRequestBodyValues<
       if (!textValue) {
         continue;
       }
-      
+
       if (propertySpec.dataType === 'number' && /\d+(\.\d+)?/.test(textValue)) {
         bodyValues[term] = Number(textValue);
       } else if (propertySpec.dataType === 'boolean') {
@@ -151,6 +151,8 @@ export async function getRequestBodyValues<
         title: 'Failed to compact JSON-LD body',
       });
     }
+
+    delete compacted['@context'];
 
     bodyValues = compacted as JSONObject;
   }

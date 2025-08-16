@@ -36,21 +36,19 @@ export async function getPropertyValueSpecifications(spec: ActionSpec<any>) {
       return [inputSpec, options];
     }
 
-    if (Array.isArray(propertySpec.properties)) {
-      for (
-        const [term, childPropertySpec] of Object.entries(
-          propertySpec.properties,
-        )
-      ) {
-        const [childInputSpec, childSpecValue] = await splitSpecAndValue(
-          childPropertySpec,
-        );
+    for (
+      const [term, childPropertySpec] of Object.entries(
+        propertySpec.properties,
+      )
+    ) {
+      const [childInputSpec, childSpecValue] = await splitSpecAndValue(
+        childPropertySpec,
+      );
 
-        specValue[`${term}-input`] = childInputSpec;
+      specValue[`${term}-input`] = childInputSpec;
 
-        if (childSpecValue !== null) {
-          specValue[term] = childSpecValue;
-        }
+      if (childSpecValue != null) {
+        specValue[term] = childSpecValue;
       }
     }
 
@@ -66,7 +64,7 @@ export async function getPropertyValueSpecifications(spec: ActionSpec<any>) {
 
     specValue[`${term}-input`] = childInputSpec;
 
-    if (childSpecValue !== null) {
+    if (childSpecValue != null) {
       specValue[term] = childSpecValue;
     }
   }

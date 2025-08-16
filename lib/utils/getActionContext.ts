@@ -52,7 +52,7 @@ export function getActionContext({
       );
     }
 
-    if (Array.isArray(propertySpec.properties)) {
+    if (propertySpec.properties != null) {
       for (
         const [term, childPropertySpec] of Object.entries(
           propertySpec.properties,
@@ -66,6 +66,7 @@ export function getActionContext({
   for (const [term, propertySpec] of Object.entries(spec)) {
     searchAndAssignContextValues(term, propertySpec);
   }
+
 
   return contextBuilder({
     vocab,

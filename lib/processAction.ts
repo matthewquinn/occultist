@@ -66,7 +66,7 @@ export async function processAction<
   const transformers: Record<string, Promise<unknown>> = {};
   const refs: ProblemDetailsParamsRefs = {};
   const appendProblemDetailsParam = makeAppendProblemDetails(refs);
-  
+
   let params: ParsedIRIValues;
   let query: ParsedIRIValues;
   let iriValues: IRIValue;
@@ -152,7 +152,7 @@ export async function processAction<
             reason: `Invalid datatype provided when a ${specValue.dataType} is expected`,
             pointer,
           },
-        });        
+        });
       } else {
         appendProblemDetailsParam({
           status: STATUS_CODE.BadRequest,
@@ -161,7 +161,7 @@ export async function processAction<
             reason: `Invalid datatype provided`,
             pointer,
           },
-        });        
+        });
       }
 
       return null;
