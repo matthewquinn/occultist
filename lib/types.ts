@@ -60,6 +60,32 @@ export type RequestBody<
 
 export type ParsedIRIValues = Record<string, JSONPrimitive | JSONPrimitive[]>;
 
+export type HandleArgs<
+  State extends ContextState = ContextState,
+> = {
+  contentType: string | string[];
+  // deno-lint-ignore no-explicit-any
+  metadata?: Record<string, any>;
+  handler: Middleware<State>
+};
+
+export type ParameterizedHandleArgs<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec<State> = ActionSpec<State>,
+> = {
+  contentType: string | string[];
+  // deno-lint-ignore no-explicit-any
+  metadata?: Record<string, any>;
+  handler: ParameterizedMiddleware<State, Spec>
+};
+
+export type AnyHandleArgs<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
+> =
+  | HandleArgs<State>
+  | ParameterizedHandleArgs<State, Spec>
+
 export interface Action<
   OriginalState extends ContextState = ContextState
 > {
@@ -72,9 +98,6 @@ export interface Action<
   readonly strict: boolean;
   readonly term?: string;
   readonly type?: string;
-  readonly typeDef?: TypeDef;
-  readonly actionPathPrefix: string;
-  readonly contentTypes: ReadonlyArray<string>;
   readonly spec?: ActionSpec;
   readonly context?: JSONObject | undefined;
   readonly bodyContentType?: ActionCompatibility;
@@ -86,7 +109,6 @@ export interface Action<
   handleContext(ctx: Context<OriginalState>): Promise<void>;
   getNextFn(ctx: Context<OriginalState>): NextFn;
 }
-
 
 export type Context<
   State extends ContextState = EmptyObject,
@@ -115,6 +137,14 @@ export type ParameterizedContext<
   action: Action;
 };
 
+export type AnyContext<
+  State extends ContextState = EmptyObject,
+  Spec extends ActionSpec<State> = ActionSpec<State>,
+> = 
+  | Context<State>
+  | ParameterizedContext<State, Spec>
+;
+
 export type NextFn =
   | (() => Promise<void>)
   | (() => void);
@@ -134,6 +164,14 @@ export type ParameterizedMiddleware<
   >,
   next: NextFn,
 ) => void | Promise<void>;
+
+export type AnyMiddleware<
+  State extends ContextState = EmptyObject,
+  Spec extends ActionSpec<State> = ActionSpec<State>,
+> = 
+  | Middleware<State>
+  | ParameterizedMiddleware<State, Spec>
+;
 
 export type ValueOption<Value extends JSONValue> = Value;
 
@@ -633,3 +671,4 @@ export type ProblemDetails = {
   instance?: string;
   errors?: Array<ProblemDetailsParam>;
 };
+

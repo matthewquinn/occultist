@@ -2,11 +2,12 @@ import { accepts, STATUS_CODE } from '@std/http';
 import type { Aliases, EmptyObject, JSONLDContext, JSONObject, Merge, TypeDef } from "./jsonld.ts";
 import { processAction } from "./processAction.ts";
 import type { ActionRegistry } from "./registry.ts";
-import type { Action, ActionCompatibility, ActionHTTPMethod, ActionPayload, ActionSpec, Context, ContextState, Middleware, NextFn, ParameterizedContext, ParameterizedMiddleware } from "./types.ts";
+import type { Action, ActionCompatibility, ActionHTTPMethod, ActionPayload, ActionSpec, Context, ContextState, Middleware, NextFn, ParameterizedContext, ParameterizedMiddleware, HandleArgs, ParameterizedHandleArgs } from "./types.ts";
 import { getActionContext } from "./utils/getActionContext.ts";
 import { getPropertyValueSpecifications } from "./utils/getPropertyValueSpecifications.ts";
 import { makeResponse } from "./utils/makeResponse.ts";
 import { urlToIRI } from "./utils/urlToIRI.ts";
+import { isObject } from './utils/isObject.ts';
 
 export function joinPaths(...paths: Array<string | number>): string {
   let fullPath: string = '';
@@ -414,7 +415,12 @@ export class PreAction<
   ): TypedAction<any, any, State, EmptyObject, OriginalState>;
 
   public handle(
-    arg1: string | string[] | Middleware<State>,
+    handleArgs: HandleArgs<State>,
+    // deno-lint-ignore no-explicit-any
+  ): TypedAction<any, any, State, EmptyObject, OriginalState>;
+
+  public handle(
+    arg1: string | string[] | Middleware<State> | HandleArgs<State>,
     arg2?: Middleware<State>,
   ): TypedAction<
     string,
@@ -437,6 +443,14 @@ export class PreAction<
       defaultHandler = arg1;
     } else if (typeof arg2 === 'function') {
       defaultHandler = arg2;
+    }
+
+    if (isObject(arg1) && typeof arg1.contentType === 'string') {
+      defaultHandler = arg1.handler;
+      defaultContentType = arg1.contentType;
+    } else if (isObject(arg1) && Array.isArray(arg1.contentType)) {
+      defaultHandler = arg1.handler;
+      [defaultContentType, ...contentTypes] = arg1.contentType;
     }
 
     if (typeof defaultHandler !== 'function') {
@@ -877,7 +891,15 @@ export class PostAction<
   ): TypedAction<Term, Compatibility, State, Spec, OriginalState>;
 
   public handle(
-    arg1: string | string[] | ParameterizedMiddleware<State, Spec>,
+    handlerArgs: ParameterizedHandleArgs<State, Spec>,
+  ): TypedAction<Term, Compatibility, State, Spec, OriginalState>;
+
+  public handle(
+    arg1:
+      | string
+      | string[]
+      | ParameterizedMiddleware<State, Spec>
+      | ParameterizedHandleArgs<State, Spec>,
     arg2?: ParameterizedMiddleware<State, Spec>,
   ): TypedAction<
     Term,
@@ -900,6 +922,14 @@ export class PostAction<
       defaultHandler = arg1;
     } else if (typeof arg2 === 'function') {
       defaultHandler = arg2;
+    }
+
+    if (isObject(arg1) && typeof arg1.contentType === 'string') {
+      defaultHandler = arg1.handler;
+      defaultContentType = arg1.contentType;
+    } else if (isObject(arg1) && Array.isArray(arg1.contentType)) {
+      defaultHandler = arg1.handler;
+      [defaultContentType, ...contentTypes] = arg1.contentType;
     }
 
     if (typeof defaultHandler !== 'function') {
@@ -1052,10 +1082,19 @@ export class TypedAction<
 
   public handle(
     contentType: string | string[],
-    middleware: ParameterizedMiddleware<
-      State,
-      Spec
-    >,
+    middleware: Middleware<State>,
+  ): TypedAction<Term, Compatibility, State, Spec, OriginalState>;
+
+  public handle(
+    handlerArgs: HandleArgs<State>,
+  ): TypedAction<Term, Compatibility, State, Spec, OriginalState>;
+
+  public handle(
+    arg1:
+      | string
+      | string[]
+      | HandleArgs<State>,
+    arg2?: Middleware<State>,
   ): TypedAction<
       Term,
       Compatibility,
@@ -1063,11 +1102,33 @@ export class TypedAction<
       Spec,
       OriginalState
     > {
-    if (typeof contentType === 'string') {
-      this.#handlers.push([[contentType], middleware]);
-    } else {
-      this.#handlers.push([contentType, middleware]);
+    let defaultContentType = '*/*';
+    let defaultHandler: Middleware<State> | undefined;
+    let contentTypes: string[] = [];
+
+    if (typeof arg1 === 'string') {
+      defaultContentType = arg1;
+    } else if (Array.isArray(arg1)) {
+      [defaultContentType, ...contentTypes] = arg1;
     }
+
+    if (typeof arg2 === 'function') {
+      defaultHandler = arg2;
+    }
+
+    if (isObject(arg1) && typeof arg1.contentType === 'string') {
+      defaultHandler = arg1.handler;
+      defaultContentType = arg1.contentType;
+    } else if (isObject(arg1) && Array.isArray(arg1.contentType)) {
+      defaultHandler = arg1.handler;
+      [defaultContentType, ...contentTypes] = arg1.contentType;
+    }
+
+    if (typeof defaultHandler !== 'function') {
+      throw new Error(`Action ${this.name} handler incorrectly configured.`);
+    }
+
+    this.#handlers.push([[defaultContentType, ...contentTypes], defaultHandler]);
 
     return this;
   }
