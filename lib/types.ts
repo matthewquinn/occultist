@@ -64,8 +64,7 @@ export type HandleArgs<
   State extends ContextState = ContextState,
 > = {
   contentType: string | string[];
-  // deno-lint-ignore no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: HandlerMetadata;
   handler: Middleware<State>
 };
 
@@ -85,6 +84,16 @@ export type AnyHandleArgs<
 > =
   | HandleArgs<State>
   | ParameterizedHandleArgs<State, Spec>
+;
+
+// deno-lint-ignore no-explicit-any
+export type HandlerMetadata = Record<string | symbol, any>;
+
+export type HandlerDescription = {
+  contentType: string;
+  metadata: HandlerMetadata;
+  action: Action;
+};
 
 export interface Action<
   OriginalState extends ContextState = ContextState
@@ -99,16 +108,17 @@ export interface Action<
   readonly term?: string;
   readonly type?: string;
   readonly spec?: ActionSpec;
-  readonly context?: JSONObject | undefined;
-  readonly bodyContentType?: ActionCompatibility;
+  readonly context?: JSONObject;
+  readonly contentTypes: string[];
 
   partial(): JSONObject | undefined;
   body(): Promise<JSONObject | undefined>;
   accepts(ctx: Context<OriginalState>): string | undefined;
   handleRequest(req: Request, state: OriginalState): Promise<Response>;
   handleContext(ctx: Context<OriginalState>): Promise<void>;
+  describeHandlers(): HandlerDescription[];
   getNextFn(ctx: Context<OriginalState>): NextFn;
-}
+};
 
 export type Context<
   State extends ContextState = EmptyObject,

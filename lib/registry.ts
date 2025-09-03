@@ -3,10 +3,16 @@ import { STATUS_CODE } from "@std/http/status";
 import { Buffer } from "node:buffer";
 import { joinPaths, ContentType, PreAction } from "./action.ts";
 import type { Aliases, EmptyObject, Merge, JSONObject, JSONLDContext, TypeDef } from "./jsonld.ts";
-import type { ContextState, Action, Middleware, ActionHTTPMethod, NextFn, Context } from "./types.ts";
+import type { ContextState, Action, Middleware, ParameterizedMiddleware, ActionHTTPMethod, NextFn, Context } from "./types.ts";
 import { makeResponse } from "./utils/makeResponse.ts";
 import { urlToIRI } from "./utils/urlToIRI.ts";
 import { contextBuilder } from "./utils/contextBuilder.ts";
+
+
+export type Handler = {
+  contentType: string;
+  metadata: Record<string | symbol, any>;
+};
 
 export type ActionRegistryArgs = {
   rootIRI: string;
@@ -90,6 +96,16 @@ export class ActionRegistry<const State extends ContextState = EmptyObject> {
 
   public delete(name: string, path: string, args?: RouteArgs): PreAction<State> {
     return this.#callMethod<'delete'>('delete', name, path, args);
+  }
+
+  public get handlers(): Handler[] {
+    const handlers: Handler[] = [];
+
+    for (const action of this.#actions) {
+      action.
+    }
+
+    return handlers;
   }
 
   public body(): JSONObject {

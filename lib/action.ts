@@ -2,7 +2,7 @@ import { accepts, STATUS_CODE } from '@std/http';
 import type { Aliases, EmptyObject, JSONLDContext, JSONObject, Merge, TypeDef } from "./jsonld.ts";
 import { processAction } from "./processAction.ts";
 import type { ActionRegistry } from "./registry.ts";
-import type { Action, ActionCompatibility, ActionHTTPMethod, ActionPayload, ActionSpec, Context, ContextState, Middleware, NextFn, ParameterizedContext, ParameterizedMiddleware, HandleArgs, ParameterizedHandleArgs } from "./types.ts";
+import type { Action, ActionCompatibility, ActionHTTPMethod, ActionPayload, ActionSpec, Context, ContextState, Middleware, NextFn, ParameterizedContext, ParameterizedMiddleware, HandleArgs, ParameterizedHandleArgs, HandlerDescription, HandlerMetadata } from "./types.ts";
 import { getActionContext } from "./utils/getActionContext.ts";
 import { getPropertyValueSpecifications } from "./utils/getPropertyValueSpecifications.ts";
 import { makeResponse } from "./utils/makeResponse.ts";
@@ -157,6 +157,7 @@ export type TypedActionArgs<
     State,
     Spec
   >;
+  metadata: HandlerMetadata;
   contentTypes?: string[];
   // deno-lint-ignore no-explicit-any
   pre: PreAction<any, OriginalState>;
@@ -181,7 +182,6 @@ export class PreAction<
   #rootIRI: string;
   #name: string;
   #method: string;
-  #compatibility?: ActionCompatibility;
   #urlPattern: URLPattern;
   #vocab?: string;
   #aliases?: Aliases;
@@ -286,6 +286,14 @@ export class PreAction<
     }
 
     return undefined;
+  }
+
+  public describeHandlers(): HandlerDescription[] {
+    if (this.#child != null) {
+      return this.#child.describeHandlers();
+    }
+
+    return [];
   }
 
   public partial(): JSONObject | undefined {
@@ -432,6 +440,7 @@ export class PreAction<
     let defaultContentType = '*/*';
     let defaultHandler: Middleware<State> | undefined;
     let contentTypes: string[] | undefined;
+    const metadata: HandlerMetadata = {};
 
     if (typeof arg1 === 'string') {
       defaultContentType = arg1;
@@ -448,9 +457,19 @@ export class PreAction<
     if (isObject(arg1) && typeof arg1.contentType === 'string') {
       defaultHandler = arg1.handler;
       defaultContentType = arg1.contentType;
+      
+      if (arg1.metadata != null) {
+        metadata[arg1.contentType] = arg1.metadata;
+      }
     } else if (isObject(arg1) && Array.isArray(arg1.contentType)) {
       defaultHandler = arg1.handler;
       [defaultContentType, ...contentTypes] = arg1.contentType;
+     
+      if (arg1.metadata != null) {
+        for (const contentType of arg1.contentType) {
+          metadata[contentType] = arg1.metadata;
+        }
+      }
     }
 
     if (typeof defaultHandler !== 'function') {
@@ -477,6 +496,7 @@ export class PreAction<
     >({
       defaultContentType,
       defaultHandler,
+      metadata,
       contentTypes,
       pre: this,
       post,
@@ -826,6 +846,14 @@ export class PostAction<
     return joinPaths(this.rootIRI, urlTemplate);
   }
 
+  public describeHandlers(): HandlerDescription[] {
+    if (this.#child != null) {
+      return this.#child.describeHandlers();
+    }
+
+    return [];
+  }
+
   public partial(): JSONObject {
     return {
       '@id': joinPaths(this.rootIRI, this.actionPathPrefix, this.name),
@@ -911,6 +939,7 @@ export class PostAction<
     let defaultContentType = '*/*';
     let defaultHandler: ParameterizedMiddleware<State, Spec> | undefined;
     let contentTypes: string[] | undefined;
+    const metadata: HandlerMetadata = {}
 
     if (typeof arg1 === 'string') {
       defaultContentType = arg1;
@@ -927,9 +956,19 @@ export class PostAction<
     if (isObject(arg1) && typeof arg1.contentType === 'string') {
       defaultHandler = arg1.handler;
       defaultContentType = arg1.contentType;
+
+      if (arg1.metadata != null) {
+        metadata[arg1.contentType] = arg1.metadata;
+      }
     } else if (isObject(arg1) && Array.isArray(arg1.contentType)) {
       defaultHandler = arg1.handler;
       [defaultContentType, ...contentTypes] = arg1.contentType;
+
+      if (arg1.metadata != null) {
+        for (const contentType of arg1.contentType) {
+          metadata[contentType] = arg1.metadata;
+        }
+      }
     }
 
     if (typeof defaultHandler !== 'function') {
@@ -946,6 +985,7 @@ export class PostAction<
       defaultContentType,
       defaultHandler,
       contentTypes,
+      metadata,
       pre: this.#parent,
       post: this,
     });
@@ -988,6 +1028,7 @@ export class TypedAction<
   #handlers: Array<
     [string[], ParameterizedMiddleware<State, Spec>]
   > = [];
+  #handlerMetadata: Map<string, HandlerMetadata> = new Map();
   #parent: PostAction<Term, Compatibility, State, Spec, OriginalState>;
 
   constructor(args: TypedActionArgs<Term, Compatibility, State, Spec>) {
@@ -997,6 +1038,10 @@ export class TypedAction<
 
     if (args.contentTypes) {
       this.#handlers.push([args.contentTypes, args.defaultHandler]);
+    }
+
+    for (const [contentType, metadata] of Object.entries(args.metadata)) {
+      this.#handlerMetadata.set(contentType, metadata);
     }
   }
 
@@ -1080,6 +1125,20 @@ export class TypedAction<
     return this.parent.body();
   }
 
+  public describeHandlers(): HandlerDescription[] {
+    const handlerDescriptions: HandlerDescription[] = [];
+
+    for (const [contentType, metadata] of this.#handlerMetadata) {
+      handlerDescriptions.push({
+        contentType,
+        metadata,
+        action: this,
+      });
+    }
+
+    return handlerDescriptions;
+  }
+
   public handle(
     contentType: string | string[],
     middleware: Middleware<State>,
@@ -1119,9 +1178,19 @@ export class TypedAction<
     if (isObject(arg1) && typeof arg1.contentType === 'string') {
       defaultHandler = arg1.handler;
       defaultContentType = arg1.contentType;
+
+      if (arg1.metadata != null) {
+        this.#handlerMetadata.set(arg1.contentType, arg1.metadata);
+      }
     } else if (isObject(arg1) && Array.isArray(arg1.contentType)) {
       defaultHandler = arg1.handler;
       [defaultContentType, ...contentTypes] = arg1.contentType;
+      
+      if (arg1.metadata != null) {
+        for (const contentType of arg1.contentType) {
+          this.#handlerMetadata.set(contentType, arg1.metadata);
+        }
+      }
     }
 
     if (typeof defaultHandler !== 'function') {
