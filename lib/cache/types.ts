@@ -1,23 +1,39 @@
 import { Action } from '../types.ts';
 
 
+export type CacheContext = {
+  status: number;
+  headers: Headers;
+  authKey?: string;
+  req: Request;
+  bodyStream: ReadableStream;
+  payload: any;
+};
+
 export type CacheStrategyType =
   | 'http'
   | 'etag'
   | 'store'
 ;
 
-export interface CacheEntryDescriptor {
+export type CacheArgs =
+  | CacheHTTPArgs
+  | CacheETagArgs
+  | CacheStoreArgs
+;
+
+export interface CacheEntryDescriptor<
+  Args extends CacheArgs = CacheArgs,
+> {
   type: CacheStrategyType;
   action: Action;
   request: Request;
-  args:
-    | CacheHTTPArgs
-    | CacheETagArgs
-    | CacheStoreArgs
+  args: Args;
 };
 
-export type CacheWhenFn = () => boolean;
+export type CacheWhenFn = (
+  ctx: CacheContext,
+) => boolean;
 
 export type CacheRuleArgs = {
   /**
@@ -53,22 +69,60 @@ export type CacheControlArgs = {
 };
 
 export type CacheHTTPArgs =
-  | CacheRuleArgs
-  | CacheControlArgs
+  & CacheRuleArgs
+  & CacheControlArgs
 ;
 
 export type CacheETagArgs =
-  | CacheRuleArgs
-  | Omit<CacheControlArgs, 'etag'>
+  & CacheRuleArgs
+  & Omit<CacheControlArgs, 'etag'>
 ;
 
 export type CacheStoreArgs<
   StorageKey extends string = string,
 > =
-  | { storage?: StorageKey }
-  | CacheRuleArgs
-  | Omit<CacheControlArgs, 'etag'>
+  & { storage?: StorageKey }
+  & CacheRuleArgs
+  & Omit<CacheControlArgs, 'etag'>
 ;
+
+export type CacheDetails = {
+  key: string;
+  iri: string;
+  status: number;
+  hasContent: boolean;
+  authKey: string;
+  etag: string;
+  header: ReadableStream;
+  contentType: string;
+  contentLength: number;
+  contentEncoding: string;
+  contentLanguage: string;
+  contentRange: string;
+};
+
+export type CacheHitHandle =
+  & CacheDetails
+  & {
+    type: 'cache-hit';
+    set(details: CacheDetails): Promise<void>;
+  };
+
+export type CacheMissHandle = {
+  type: 'cache-miss';
+  set(details: CacheDetails): Promise<void>;
+};
+
+export type LockedCacheMissHandle = {
+  type: 'locked-cache-miss';
+  set(details: CacheDetails): Promise<void>;
+  release(): Promise<void>;
+};
+
+export interface CacheMeta {
+  get(key: string): Promise<CacheHitHandle | CacheMissHandle>;
+  getOrLock(key: string): Promise<CacheHitHandle | LockedCacheMissHandle>;
+}
 
 export interface CacheStorage {
   /**
