@@ -1,6 +1,6 @@
-import { NextFn } from '../types.ts';
+import type { NextFn } from '../types.ts';
 import { ConditionalRequestRules } from './etag.ts';
-import { CacheHTTPArgs, CacheETagArgs, CacheStoreArgs, CacheEntryDescriptor, CacheMeta, CacheStorage, CachedLockHandle, UncachedLockHandle, CacheContext } from './types.ts';
+import type { CacheHTTPArgs, CacheETagArgs, CacheStoreArgs, CacheEntryDescriptor, CacheMeta, CacheStorage, CacheContext } from './types.ts';
 
 
 export class Cache<
@@ -123,7 +123,8 @@ export class Cache<
       } else if (!rules.ifNoneMatch(resourceState.etag)) {
         ctx.status = 304;
 
-        return;
+        return
+
       }
     }
 
@@ -189,4 +190,13 @@ export class Cache<
     }
   }
 }
+
+export type CacheMiddlewareArgs =
+  & { cache: Cache }
+  & (
+    | CacheHTTPArgs
+    | CacheETagArgs
+    | CacheStoreArgs
+  )
+;
 

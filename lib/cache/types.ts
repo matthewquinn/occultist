@@ -119,9 +119,12 @@ export type LockedCacheMissHandle = {
   release(): Promise<void>;
 };
 
+export type Tagger = () => Promise<void>;
+
 export interface CacheMeta {
   get(key: string): Promise<CacheHitHandle | CacheMissHandle>;
   getOrLock(key: string): Promise<CacheHitHandle | LockedCacheMissHandle>;
+  tag(): Tagger;
 }
 
 export interface CacheStorage {
@@ -144,3 +147,5 @@ export interface ICacheGetter {
     | ReadableStream
   >;
 }
+
+
