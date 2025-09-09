@@ -5,16 +5,16 @@ import type { CacheMiddlewareArgs } from '../cache/cache.ts';
 
 export type HintLink = {
   href: string;
-  rel: string | string[];
+  rel?: string | string[];
   type?: string;
-  as: string;
+  as?: string;
   preload?: boolean;
   fetchPriority?: 'high' | 'low' | 'auto';
   crossOrigin?: boolean;
 };
 
 export type HintArgs = {
-  link: string | HintLink | HintLink[];
+  link: HintLink | HintLink[];
   csp?: string;
 };
 export type Middleware = () => void | Promise<void>;
