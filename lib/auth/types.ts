@@ -20,7 +20,3 @@ export type AuthMiddlewareResponse<
   state: State;
 };
 
-export type AuthMiddleware<
-  State extends AuthState = AuthState,
-> = () => Promise<AuthMiddlewareResponse<State>>;
-

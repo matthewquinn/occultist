@@ -1,7 +1,24 @@
-import type { AuthMiddleware } from '../auth/types.ts';
 import type { Tagger } from '../cache/types.ts';
 import type { CacheMiddlewareArgs } from '../cache/cache.ts';
+import type { JSONObject } from "../jsonld.ts";
+import type { Registry } from '../registry/types.ts';
+import type { Scope } from "../scopes/types.ts";
 
+export interface Handler {
+  readonly contentType: string;
+  readonly name: string;
+  readonly action: ImplementedAction;
+  readonly registry: Registry;
+}
+
+export interface ImplementedAction {
+  readonly name: string;
+  readonly partial: JSONObject;
+  readonly representation: JSONObject;
+  readonly registry: Registry;
+  readonly scope: Scope;
+  readonly handlers: Handler[];
+}
 
 export type HintLink = {
   href: string;

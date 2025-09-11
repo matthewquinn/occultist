@@ -42,8 +42,6 @@ Deno.test('Writer writes hints', {
     server.listen(0, '127.0.0.1', async () => {
       const { port, address } = server.address();
   
-      console.log(address);
-
       const res = await fetch(`http://${address}:${port}`);
       await res.text();
 
