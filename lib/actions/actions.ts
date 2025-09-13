@@ -1,41 +1,54 @@
 import type { HintArgs } from './types.ts';
 import type { Registry } from '../registry/registry.ts';
 import type { Scope } from "../scopes/scopes.ts";
-import { ActionSpec } from "./spec.ts";
+import type { ContextState, ActionSpec } from "./spec.ts";
+import type { Context } from "./context.ts";
+import { HandleArgs } from "../types.ts";
 
-export type HandlerFn = () => void;
+export type HandlerFn<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
+> = (ctx: Context<State, Spec>) => void;
 
 export type HandlerMeta = Map<symbol | string, string | string[]>;
 
-export type HandlerArgs = {
+export type HandlerArgs<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
+> = {
   contentType: string | string[];
-  handler: HandlerFn;
+  handler: HandlerFn<State, Spec>;
   meta?: Record<symbol | string, string | string[]>;
 };
 
 export type TransformerFn = () => void;
 
 export interface Handler<
-  Action extends ImplementedAction = ImplementedAction,
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
+  Action extends ImplementedAction<State, Spec> = ImplementedAction<State, Spec>,
 > {
   readonly contentType: string;
   readonly name: string;
   readonly meta: HandlerMeta;
   readonly action: Action;
   readonly registry: Registry;
-  readonly handler: HandlerFn;
+  readonly handler: HandlerFn<State, Spec>;
 }
 
-export interface ImplementedAction {
+export interface ImplementedAction<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
+> {
   readonly name: string;
-  // readonly partial: JSONObject;
-  // readonly representation: JSONObject;
+  readonly spec: Spec;
   readonly registry: Registry;
   readonly scope?: Scope;
-  readonly handlers: Handler[];
+  readonly handlers: Handler<State, Spec>[];
 }
 
 export class ActionMeta<
+  State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,
 > {
   method: string;
@@ -45,7 +58,7 @@ export class ActionMeta<
   transformers: Map<string, TransformerFn> = new Map();
   scope?: Scope;
   registry: Registry;
-  action?: ImplementedAction;
+  action?: ImplementedAction<State, Spec>;
 
   constructor(
     method: string,
@@ -62,49 +75,60 @@ export class ActionMeta<
   }
 }
 
-export interface Handleable<ActionType> {
+export interface Handleable<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
+> {
   handle(
     contentType: string | string[],
-    handler: HandlerFn,
-  ): ActionType;
+    handler: HandlerFn<State, Spec>,
+  ): FinalizedAction<State, Spec>;
+
+  handle(
+    args: HandlerArgs<State, Spec>,
+  ): FinalizedAction<State, Spec>;
 }
 
 export class FinalizedAction<
+  State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,
 > implements
-  Handleable<FinalizedAction<Spec>>,
-  ImplementedAction<Spec>
+  Handleable<State, Spec>,
+  ImplementedAction<State, Spec>
 {
-  #meta: ActionMeta;
-  #handlers: Handler<Spec>[];
+  
+  #spec: Spec;
+  #meta: ActionMeta<State, Spec>;
+  #handlers: Handler<State, Spec>[];
 
   constructor(
-    meta: ActionMeta,
-    contentType: string | string[],
-    handler: HandlerFn<Spec>,
+    spec: Spec,
+    meta: ActionMeta<State, Spec>,
+    handlerArgs: HandlerArgs<State, Spec>,
   ) {
+    this.#spec = spec;
     this.#meta = meta;
 
-    const handlers: Handler<Spec>[] = [];
+    const handlers: Handler<State, Spec, FinalizedAction<State, Spec>>[] = [];
 
-    if (!Array.isArray(contentType)) {
+    if (typeof handlerArgs.contentType === 'string') {
       handlers.push({
-        contentType,
+        contentType: handlerArgs.contentType,
+        handler: handlerArgs.handler,
+        meta: new Map(Object.entries(handlerArgs.meta ?? new Map())),
         name: this.#meta.name,
-        meta: new Map(),
         action: this,
         registry: this.#meta.registry,
-        handler,
       });
     } else {
-      for (const item of contentType) {
+      for (const item of handlerArgs.contentType) {
         handlers.push({
           contentType: item,
+          handler: handlerArgs.handler,
           name: this.#meta.name,
-          meta: new Map(),
+          meta: new Map(Object.entries(handlerArgs.meta ?? new Map())),
           action: this,
           registry: this.#meta.registry,
-          handler,
         });
       }
     }
@@ -112,8 +136,51 @@ export class FinalizedAction<
     this.#handlers = handlers;
   }
 
+  static fromHandlers<
+    State extends ContextState = ContextState,
+    Spec extends ActionSpec = ActionSpec,
+  >(
+    spec: Spec,
+    meta: ActionMeta<State, Spec>,
+    contextType: string | string[],
+    handler: HandlerFn<State, Spec>,
+  ): FinalizedAction<State, Spec>;
+
+  static fromHandlers<
+    State extends ContextState = ContextState,
+    Spec extends ActionSpec = ActionSpec,
+  >(
+    spec: Spec,
+    meta: ActionMeta<State, Spec>,
+    handlerArgs: HandlerArgs<State, Spec>,
+  ): FinalizedAction<State, Spec>;
+
+  static fromHandlers<
+    State extends ContextState = ContextState,
+    Spec extends ActionSpec = ActionSpec,
+  >(
+    spec: Spec,
+    meta: ActionMeta<State, Spec>,
+    arg3: string | string[] | HandlerArgs<State, Spec>,
+    arg4?: HandlerFn<State, Spec>,
+  ): FinalizedAction<State, Spec> {
+    if (Array.isArray(arg3) || typeof arg3 === 'string') {
+      return new FinalizedAction<State, Spec>(
+        spec,
+        meta,
+        { contentType: arg3, handler: arg4 as HandlerFn<State, Spec> },
+      );
+    }
+
+    return new FinalizedAction(spec, meta, arg3);
+  }
+
   get name(): string {
     return this.#meta.name;
+  }
+
+  get spec(): Spec {
+    return this.#spec;
   }
 
   get scope(): Scope | undefined {
@@ -124,30 +191,30 @@ export class FinalizedAction<
     return this.#meta.registry;
   }
   
-  get handlers(): Handler<Spec>[] {
+  get handlers(): Handler<State, Spec>[] {
     return this.#handlers;
   }
 
   handle(
     contentType: string | string[],
-    handler: HandlerFn<Spec>,
-  ): FinalizedAction;
+    handler: HandlerFn<State, Spec>,
+  ): FinalizedAction<State, Spec>;
 
   handle(
-    args: HandlerArgs<Spec>,
-  ): FinalizedAction<Spec>;
+    args: HandlerArgs<State, Spec>,
+  ): FinalizedAction<State, Spec>;
   
   handle(
-    arg1: string | string[] | HandlerArgs<Spec>,
-    arg2?: HandlerFn<Spec>,
-  ): FinalizedAction<Spec> {
+    arg1: string | string[] | HandlerArgs<State, Spec>,
+    arg2?: HandlerFn<State, Spec>,
+  ): FinalizedAction<State, Spec> {
     let contentType: string | string[];
-    let handler: HandlerFn<Spec>;
-    let meta: HandlerMeta<Spec>;
+    let handler: HandlerFn<State, Spec>;
+    let meta: HandlerMeta;
 
     if (Array.isArray(arg1) || typeof arg1 === 'string') {
       contentType = arg1;
-      handler = arg2 as HandlerFn<Spec>;
+      handler = arg2 as HandlerFn<State, Spec>;
       meta = new Map();
     } else {
       contentType = arg1.contentType;
@@ -186,22 +253,30 @@ export interface Applicable<ActionType> {
 }
 
 export class DefinedAction<
+  State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,
 > implements
-  Applicable<DefinedAction<Spec>>,
-  Handleable<FinalizedAction<Spec>>,
-  ImplementedAction<Spec>
+  Applicable<DefinedAction<State, Spec>>,
+  Handleable<State, Spec>,
+  ImplementedAction<State, Spec>
 {
-  #meta: ActionMeta;
+  #spec: Spec;
+  #meta: ActionMeta<State, Spec>;
 
   constructor(
-    meta: ActionMeta,
+    spec: Spec,
+    meta: ActionMeta<State, Spec>,
   ) {
+    this.#spec = spec;
     this.#meta = meta;
   }
 
   get name(): string {
     return this.#meta.name;
+  }
+
+  get spec(): Spec {
+    return this.#spec;
   }
 
   get scope(): Scope | undefined {
@@ -212,41 +287,58 @@ export class DefinedAction<
     return this.#meta.registry;
   }
 
-  get handlers(): Handler[] {
+  get handlers(): Handler<State, Spec>[] {
     return [];
   }
  
-  use(): DefinedAction<Spec> {
+  use(): DefinedAction<State, Spec> {
     return this;
   }
 
   handle(
     contentType: string | string[],
-    handler: HandlerFn,
-  ): FinalizedAction<Spec> {
-    return this.#meta.action = new FinalizedAction<Spec>(
+    handler: HandlerFn<State, Spec>,
+  ): FinalizedAction<State, Spec>;
+
+  handle(
+    args: HandlerArgs<State, Spec>,
+  ): FinalizedAction<State, Spec>;
+
+  handle(
+    arg1: string | string[] | HandlerArgs<State, Spec>,
+    arg2?: HandlerFn<State, Spec>,
+  ): FinalizedAction<State, Spec> {
+    return FinalizedAction.fromHandlers(
+      this.#spec,
       this.#meta,
-      contentType,
-      handler,
+      arg1 as string,
+      arg2 as HandlerFn<State, Spec>,
     );
   }
 }
 
-export class Action implements
+export class Action<
+  State extends ContextState = ContextState,
+> implements
   Applicable<Action>,
-  Handleable<FinalizedAction>,
-  ImplementedAction
+  Handleable<State>,
+  ImplementedAction<State>
 {
-  #meta: ActionMeta;
+  #spec: ActionSpec = {};
+  #meta: ActionMeta<State>;
 
   constructor(
-    meta: ActionMeta,
+    meta: ActionMeta<State>,
   ) {
     this.#meta = meta;
   }
 
   get name(): string {
     return this.#meta.name;
+  }
+
+  get spec(): ActionSpec {
+    return this.#spec;
   }
 
   get scope(): Scope | undefined {
@@ -261,26 +353,37 @@ export class Action implements
     return [];
   }
 
-  use(): Action {
+  use(): Action<State> {
     return this;
   }
 
   define<
     Spec extends ActionSpec = ActionSpec,
-  >(): DefinedAction<Spec> {
-    return this.#meta.action = new DefinedAction<Spec>(
-      this.#meta,
+  >(spec: Spec): DefinedAction<State, Spec> {
+    return this.#meta.action = new DefinedAction<State, Spec>(
+      spec,
+      this.#meta as ActionMeta<State, Spec>,
     );
   }
 
   handle(
     contentType: string | string[],
-    handler: HandlerFn,
-  ): FinalizedAction {
-    return this.#meta.action = new FinalizedAction(
+    handler: HandlerFn<State>,
+  ): FinalizedAction<State>;
+
+  handle(
+    args: HandleArgs<State>,
+  ): FinalizedAction<State>;
+
+  handle(
+    arg1: string | string[] | HandleArgs<State>,
+    arg2?: HandlerFn<State>,
+  ): FinalizedAction<State> {
+    return this.#meta.action = FinalizedAction.fromHandlers(
+      this.#spec,
       this.#meta,
-      contentType,
-      handler,
+      arg1 as string,
+      arg2 as HandlerFn<State>,
     );
   }
 }

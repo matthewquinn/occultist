@@ -1,5 +1,5 @@
 import type { ReadStream } from "node:fs";
-import type { FinalizedAction, Handler, DefinedAction, ImplementedAction, Action } from "./actions.ts";
+import type { Handler, ImplementedAction } from "./actions.ts";
 import type { Registry } from "../registry/registry.ts";
 import type { JSONValue } from "../jsonld.ts";
 import type { ActionSpec, ContextState } from "./spec.ts";
@@ -19,33 +19,35 @@ export interface WrappedResponse {
 };
 
 export type ContextArgs<
-  Action extends ImplementedAction = ImplementedAction,
+  Spec extends ActionSpec = ActionSpec,
 > = {
   iri: string;
   public: boolean;
   authKey: string;
-  handler: Handler<Action>;
+  handler: Handler<ImplementedAction<Spec>>;
   request: WrappedRequest;
   response: WrappedResponse;
 };
 
 export class Context<
   State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
 > {
 
-  #iri: string;
   status?: number;
   statusText?: string;
+
+  #iri: string;
   #public: boolean = false
   #authKey?: string;
   #state: State = new Map() as State;
-  #action: ImplementedAction;
+  #action: ImplementedAction<Spec>;
   #registry: Registry;
-  #handler: Handler<Action>;
+  #handler: Handler<ImplementedAction<Spec>>;
   #request: WrappedRequest;
   #response: WrappedResponse;
 
-  constructor(args: ContextArgs<Action>) {
+  constructor(args: ContextArgs<Spec>) {
     this.#iri = args.iri;
     this.#public = args.public;
     this.#authKey = args.authKey;
@@ -94,13 +96,3 @@ export class Context<
 
 }
 
-export class ParameterizedContext<
-  State extends ContextState = ContextState,
-  Spec extends ActionSpec<State> = ActionSpec<State>,
-> extends Context<State> {
-
-  constructor(args: ContextArgs<DefinedAction<Spec> | FinalizedAction<Spec>>) {
-    super(args);
-  }
-
-};
