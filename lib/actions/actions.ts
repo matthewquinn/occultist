@@ -1,6 +1,7 @@
 import type { HintArgs } from './types.ts';
-import type { Registry } from '../registry/types.ts';
-import type { Scope } from "../scopes/types.ts";
+import type { Registry } from '../registry/registry.ts';
+import type { Scope } from "../scopes/scopes.ts";
+import { ActionSpec } from "./spec.ts";
 
 export type HandlerFn = () => void;
 
@@ -9,16 +10,18 @@ export type HandlerMeta = Map<symbol | string, string | string[]>;
 export type HandlerArgs = {
   contentType: string | string[];
   handler: HandlerFn;
-  meta?: HandlerMeta;
+  meta?: Record<symbol | string, string | string[]>;
 };
 
 export type TransformerFn = () => void;
 
-export interface Handler {
+export interface Handler<
+  Action extends ImplementedAction = ImplementedAction,
+> {
   readonly contentType: string;
   readonly name: string;
   readonly meta: HandlerMeta;
-  readonly action: ImplementedAction;
+  readonly action: Action;
   readonly registry: Registry;
   readonly handler: HandlerFn;
 }
@@ -28,29 +31,32 @@ export interface ImplementedAction {
   // readonly partial: JSONObject;
   // readonly representation: JSONObject;
   readonly registry: Registry;
-  readonly scope: Scope;
+  readonly scope?: Scope;
   readonly handlers: Handler[];
 }
 
-export class ActionMeta {
+export class ActionMeta<
+  Spec extends ActionSpec = ActionSpec,
+> {
+  method: string;
   name: string;
   path: string;
-  method: string;
   hints: HintArgs[] = [];
   transformers: Map<string, TransformerFn> = new Map();
-  scope: Scope;
+  scope?: Scope;
   registry: Registry;
+  action?: ImplementedAction;
 
   constructor(
+    method: string,
     name: string,
     path: string,
-    method: string,
-    scope: Scope,
     registry: Registry,
+    scope?: Scope,
   ) {
+    this.method = method;
     this.name = name;
     this.path = path;
-    this.method = method;
     this.scope = scope;
     this.registry = registry;
   }
@@ -63,21 +69,23 @@ export interface Handleable<ActionType> {
   ): ActionType;
 }
 
-export class FinalizedAction implements
-  Handleable<FinalizedAction>,
-  ImplementedAction
+export class FinalizedAction<
+  Spec extends ActionSpec = ActionSpec,
+> implements
+  Handleable<FinalizedAction<Spec>>,
+  ImplementedAction<Spec>
 {
   #meta: ActionMeta;
-  #handlers: Handler[];
+  #handlers: Handler<Spec>[];
 
   constructor(
     meta: ActionMeta,
     contentType: string | string[],
-    handler: HandlerFn,
+    handler: HandlerFn<Spec>,
   ) {
     this.#meta = meta;
 
-    const handlers: Handler[] = [];
+    const handlers: Handler<Spec>[] = [];
 
     if (!Array.isArray(contentType)) {
       handlers.push({
@@ -104,30 +112,54 @@ export class FinalizedAction implements
     this.#handlers = handlers;
   }
 
-  get name() {
+  get name(): string {
     return this.#meta.name;
   }
 
-  get scope() {
+  get scope(): Scope | undefined {
     return this.#meta.scope
   }
 
-  get registry() {
+  get registry(): Registry {
     return this.#meta.registry;
   }
   
-  get handlers() {
+  get handlers(): Handler<Spec>[] {
     return this.#handlers;
   }
-  
+
   handle(
     contentType: string | string[],
-    handler: HandlerFn,
-  ): FinalizedAction {
+    handler: HandlerFn<Spec>,
+  ): FinalizedAction;
+
+  handle(
+    args: HandlerArgs<Spec>,
+  ): FinalizedAction<Spec>;
+  
+  handle(
+    arg1: string | string[] | HandlerArgs<Spec>,
+    arg2?: HandlerFn<Spec>,
+  ): FinalizedAction<Spec> {
+    let contentType: string | string[];
+    let handler: HandlerFn<Spec>;
+    let meta: HandlerMeta<Spec>;
+
+    if (Array.isArray(arg1) || typeof arg1 === 'string') {
+      contentType = arg1;
+      handler = arg2 as HandlerFn<Spec>;
+      meta = new Map();
+    } else {
+      contentType = arg1.contentType;
+      handler = arg1.handler;
+      meta = new Map(Object.entries(arg1.meta ?? {}));
+    }
+
     if (!Array.isArray(contentType)) {
       this.#handlers.push({
         contentType,
         name: this.#meta.name,
+        meta,
         action: this,
         registry: this.#meta.registry,
         handler,
@@ -137,6 +169,7 @@ export class FinalizedAction implements
         this.#handlers.push({
           contentType: item,
           name: this.#meta.name,
+          meta,
           action: this,
           registry: this.#meta.registry,
           handler,
@@ -152,9 +185,12 @@ export interface Applicable<ActionType> {
   use(): ActionType;
 }
 
-export class DefinedAction implements
-  Applicable<DefinedAction>,
-  Handleable<FinalizedAction>
+export class DefinedAction<
+  Spec extends ActionSpec = ActionSpec,
+> implements
+  Applicable<DefinedAction<Spec>>,
+  Handleable<FinalizedAction<Spec>>,
+  ImplementedAction<Spec>
 {
   #meta: ActionMeta;
 
@@ -164,31 +200,31 @@ export class DefinedAction implements
     this.#meta = meta;
   }
 
-  get name() {
-    return this.#meta;
+  get name(): string {
+    return this.#meta.name;
   }
 
-  get scope() {
+  get scope(): Scope | undefined {
     return this.#meta.scope;
   }
 
-  get registry() {
+  get registry(): Registry {
     return this.#meta.registry;
   }
 
-  get handlers() {
+  get handlers(): Handler[] {
     return [];
   }
  
-  use(): DefinedAction {
+  use(): DefinedAction<Spec> {
     return this;
   }
 
   handle(
     contentType: string | string[],
     handler: HandlerFn,
-  ): FinalizedAction {
-    return new FinalizedAction(
+  ): FinalizedAction<Spec> {
+    return this.#meta.action = new FinalizedAction<Spec>(
       this.#meta,
       contentType,
       handler,
@@ -196,14 +232,10 @@ export class DefinedAction implements
   }
 }
 
-export interface Definable<ActionType> {
-  define(): ActionType;
-}
-
 export class Action implements
   Applicable<Action>,
-  Definable<DefinedAction>,
-  Handleable<FinalizedAction>
+  Handleable<FinalizedAction>,
+  ImplementedAction
 {
   #meta: ActionMeta;
 
@@ -213,19 +245,19 @@ export class Action implements
     this.#meta = meta;
   }
 
-  get name() {
-    return this.#meta;
+  get name(): string {
+    return this.#meta.name;
   }
 
-  get scope() {
+  get scope(): Scope | undefined {
     return this.#meta.scope;
   }
 
-  get registry() {
+  get registry(): Registry {
     return this.#meta.registry;
   }
   
-  get handlers() {
+  get handlers(): Handler[] {
     return [];
   }
 
@@ -233,8 +265,10 @@ export class Action implements
     return this;
   }
 
-  define(): DefinedAction {
-    return new DefinedAction(
+  define<
+    Spec extends ActionSpec = ActionSpec,
+  >(): DefinedAction<Spec> {
+    return this.#meta.action = new DefinedAction<Spec>(
       this.#meta,
     );
   }
@@ -243,7 +277,7 @@ export class Action implements
     contentType: string | string[],
     handler: HandlerFn,
   ): FinalizedAction {
-    return new FinalizedAction(
+    return this.#meta.action = new FinalizedAction(
       this.#meta,
       contentType,
       handler,
@@ -270,8 +304,8 @@ export class PreAction implements
     );
   }
 
-  define() {
-    return new DefinedAction(
+  define(): DefinedAction {
+    return this.#meta.action = new DefinedAction(
       this.#meta,
     );
   }
@@ -280,7 +314,7 @@ export class PreAction implements
     contentType: string | string[],
     handler: HandlerFn,
   ): FinalizedAction {
-    return new FinalizedAction(
+    return this.#meta.action = new FinalizedAction(
       this.#meta,
       contentType,
       handler,
@@ -328,14 +362,14 @@ export class Endpoint implements
     return this;
   }
 
-  use() {
-    return new Action(
+  use(): Action {
+    return this.#meta.action = new Action(
       this.#meta,
     );
   }
 
-  define() {
-    return new DefinedAction(
+  define(): DefinedAction {
+    return this.#meta.action = new DefinedAction(
       this.#meta,
     );
   }
@@ -344,7 +378,7 @@ export class Endpoint implements
     contentType: string | string[],
     handler: HandlerFn,
   ): FinalizedAction {
-    return new FinalizedAction(
+    return this.#meta.action = new FinalizedAction(
       this.#meta,
       contentType,
       handler,
@@ -359,11 +393,12 @@ export class ActionAuth {
     this.#meta = meta;
   }
 
-  public() {
+  public(): Endpoint {
     return new Endpoint(this.#meta);
   }
 
-  auth() {
+  auth(): Endpoint {
     return new Endpoint(this.#meta);
   }
 }
+

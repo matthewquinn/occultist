@@ -1,46 +1,27 @@
-import type { JSONObject, JSONPrimitive, JSONValue, OrArray, RecursiveDigit, RecursiveIncrement, TypeDef } from "./jsonld.ts";
-import type { DeepMerge } from './merge.ts';
+import type { JSONPrimitive, JSONValue, OrArray, RecursiveDigit, RecursiveIncrement, TypeDef } from "../jsonld.ts";
+import type { Action } from "../types.ts";
+import type { Context } from './context.ts';
 
-
-
-export type ActionHTTPMethod =
-  | 'head'
-  | 'get'
-  | 'post'
-  | 'put'
-  | 'patch'
-  | 'delete'
-  | 'options';
+// deno-lint-ignore no-explicit-any
+export type ContextState = Map<string, any>;
 
 export type EntryPoint = {
   contentType?: string;
   encodingType?: string;
-  httpMethod?: Uppercase<ActionHTTPMethod>;
+  httpMethod?: string;
   urlTemplate: string;
+  actionPlatform?: string;
 };
 
 export type Target = string | EntryPoint;
 
-export type Merge<T1 extends object, T2 extends object> = DeepMerge<T1, T2>;
-
-// deno-lint-ignore no-explicit-any
-export type EmptyObject = Pick<{ [key: string]: any }, string>;
-
-// deno-lint-ignore no-explicit-any
-export type ContextState = Record<string, any>;
-
-export type ActionCompatibility =
-  | 'url-encoded'
-  | 'form-data'
-  | 'json';
+export type Merge<M1 extends ContextState, M2 extends ContextState> = {
+  [K in keyof M1 as K extends keyof M2 ? never : K]: M1[K];
+} & {
+  [K in keyof M2]: M2[K];
+};
 
 export type ExtensionMap = Record<string, string>;
-
-export enum BodyContentType {
-  ApplicationJSON = 'application/json',
-  ApplicationJSONLD = 'application/ld+json',
-  MultipartFormData = 'multipart/form-data',
-}
 
 export interface FileData extends AsyncIterable<Uint8Array> {
   arrayBuffer(): Promise<ArrayBufferLike>;
@@ -49,14 +30,9 @@ export interface FileData extends AsyncIterable<Uint8Array> {
   type: string | null;
   name: string | null;
   filename: string | null;
-}
+};
 
-export type FileInput = FileData | string;
-
-export type RequestBody<
-  Compatibility extends ActionCompatibility = ActionCompatibility,
-> = Compatibility extends 'form-data' ? FormData
-  : JSONObject;
+export type FileValue = FileData | string;
 
 export type ParsedIRIValues = Record<string, JSONPrimitive | JSONPrimitive[]>;
 
@@ -89,56 +65,8 @@ export type AnyHandleArgs<
 // deno-lint-ignore no-explicit-any
 export type HandlerMetadata = Record<string | symbol, any>;
 
-export type HandlerDescription = {
-  contentType: string;
-  metadata: HandlerMetadata;
-  action: Action;
-};
-
-export interface Action<
-  OriginalState extends ContextState = ContextState
-> {
-  readonly rootIRI: string;
-  readonly name: string;
-  readonly method: string;
-  readonly urlPattern: URLPattern;
-  readonly actionIRI: string;
-  readonly expose: boolean;
-  readonly strict: boolean;
-  readonly term?: string;
-  readonly type?: string;
-  readonly spec?: ActionSpec;
-  readonly context?: JSONObject;
-  readonly contentTypes: string[];
-
-  partial(): JSONObject | undefined;
-  body(): Promise<JSONObject | undefined>;
-  accepts(ctx: Context<OriginalState>): string | undefined;
-  handleRequest(req: Request, state: OriginalState): Promise<Response>;
-  handleContext(ctx: Context<OriginalState>): Promise<void>;
-  describeHandlers(): HandlerDescription[];
-  getNextFn(ctx: Context<OriginalState>): NextFn;
-};
-
-export type Context<
-  State extends ContextState = EmptyObject,
-> = {
-  method: ActionHTTPMethod;
-  iri: string;
-  req: Request;
-  contentType: string;
-  state: State;
-  status?: number;
-  bodySerialized: boolean;
-  body?: string | Blob | BufferSource | ReadableStream | JSONValue;
-  headers: Headers;
-  // deno-lint-ignore no-explicit-any
-  registry: ActionRegistry<any>;
-  action?: Action;
-};
-
 export type ParameterizedContext<
-  State extends ContextState = EmptyObject,
+  State extends ContextState = ContextState,
   Spec extends ActionSpec<State> = ActionSpec<State>,
 > = Context<State> & {
   params: ParsedIRIValues;
@@ -148,24 +76,21 @@ export type ParameterizedContext<
 };
 
 export type AnyContext<
-  State extends ContextState = EmptyObject,
+  State extends ContextState = ContextState,
   Spec extends ActionSpec<State> = ActionSpec<State>,
 > = 
   | Context<State>
   | ParameterizedContext<State, Spec>
 ;
 
-export type NextFn =
-  | (() => Promise<void>)
-  | (() => void);
+export type NextFn = () => Promise<void>;
 
 export type Middleware<
-  // deno-lint-ignore no-explicit-any
-  State extends Record<string, any> = Record<string, any>,
+  State extends ContextState = ContextState,
 > = (ctx: Context<State>, next: NextFn) => void | Promise<void>;
 
 export type ParameterizedMiddleware<
-  State extends ContextState = EmptyObject,
+  State extends ContextState = ContextState,
   Spec extends ActionSpec<State> = ActionSpec<State>,
 > = (
   ctx: ParameterizedContext<
@@ -176,7 +101,7 @@ export type ParameterizedMiddleware<
 ) => void | Promise<void>;
 
 export type AnyMiddleware<
-  State extends ContextState = EmptyObject,
+  State extends ContextState = ContextState,
   Spec extends ActionSpec<State> = ActionSpec<State>,
 > = 
   | Middleware<State>
@@ -203,44 +128,44 @@ export type ActionOptions<Value extends JSONValue> =
   | ActionOptionsRetriever<Value>;
 
 export type ValidatorFn<
-  DataType extends JSONValue | FileInput,
+  DataType extends JSONValue | FileValue,
   Value extends DataType,
 > = (
   value: DataType,
 ) => value is Value;
 
 export type TransformerFn<
-  Value extends JSONValue | FileInput | FileInput[],
+  Value extends JSONValue | FileValue | FileValue[],
   // deno-lint-ignore no-explicit-any
   TransformTo extends any,
-  ActionState extends ContextState = EmptyObject,
-> = (value: Value, state: ActionState) => TransformTo | Promise<TransformTo>;
+  State extends ContextState = ContextState,
+> = (value: Value, state: State) => TransformTo | Promise<TransformTo>;
 
 export type FileSingleSpec<
-  Value extends FileInput = FileInput,
+  Value extends FileValue = FileValue,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType: 'file';
   multipleValues?: undefined;
   options?: undefined;
   contentType?: string | string[];
-  validator?: ValidatorFn<FileInput, Value>;
+  validator?: ValidatorFn<FileValue, Value>;
   transformer?: TransformerFn<Value, TransformTo, ActionState>;
 };
 
 export type FileMultiSpec<
-  Value extends FileInput = FileInput,
+  Value extends FileValue = FileValue,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType: 'file';
   multipleValues: true;
   options?: undefined;
   contentType?: string | string[];
-  validator?: ValidatorFn<FileInput, Value>;
+  validator?: ValidatorFn<FileValue, Value>;
   transformer?: TransformerFn<Value[], TransformTo, ActionState>;
 };
 
@@ -248,7 +173,7 @@ export type BooleanSingleSpec<
   Value extends boolean = boolean,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType: 'boolean';
   options?: ActionOptions<Value>;
@@ -262,7 +187,7 @@ export type BooleanMultiSpec<
   Value extends boolean = boolean,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType: 'boolean';
   options?: ActionOptions<Value>;
@@ -276,7 +201,7 @@ export type NumberSingleSpec<
   Value extends number = number,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType: 'number';
   options?: ActionOptions<Value>;
@@ -290,7 +215,7 @@ export type NumberMultiSpec<
   Value extends number = number,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType: 'number';
   options?: ActionOptions<Value>;
@@ -304,7 +229,7 @@ export type StringSingleSpec<
   Value extends string = string,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType: 'string';
   options?: ActionOptions<Value>;
@@ -318,7 +243,7 @@ export type StringMultiSpec<
   Value extends string = string,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType: 'string';
   options?: ActionOptions<Value>;
@@ -332,7 +257,7 @@ export type JSONValueSingleSpec<
   Value extends JSONValue = JSONValue,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType?: undefined;
   options?: ActionOptions<Value>;
@@ -346,7 +271,7 @@ export type JSONValueMultiSpec<
   Value extends JSONValue = JSONValue,
   // deno-lint-ignore no-explicit-any
   TransformTo extends any = any,
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > = {
   dataType?: undefined;
   options?: ActionOptions<Value>;
@@ -357,7 +282,7 @@ export type JSONValueMultiSpec<
 };
 
 export type SpecOptions<
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
 > =
   // deno-lint-ignore no-explicit-any
   | BooleanSingleSpec<boolean, any, ActionState>
@@ -376,15 +301,14 @@ export type SpecOptions<
   // deno-lint-ignore no-explicit-any
   | JSONValueMultiSpec<JSONValue, any, ActionState>
   // deno-lint-ignore no-explicit-any
-  | FileSingleSpec<FileInput, any, ActionState>
+  | FileSingleSpec<FileValue, any, ActionState>
   // deno-lint-ignore no-explicit-any
-  | FileMultiSpec<FileInput, any, ActionState>
+  | FileMultiSpec<FileValue, any, ActionState>
 ;
 
 export type BaseSpec<
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
   InternalTerm extends string = string,
-  Compatibility extends ActionCompatibility = ActionCompatibility,
 > =
   & {
     valueName?: string;
@@ -406,7 +330,7 @@ export type BaseSpec<
   )
   & SpecOptions<ActionState>;
 
-export type ValueSpec<ActionState extends ContextState = EmptyObject> =
+export type ValueSpec<ActionState extends ContextState = ContextState> =
   & BaseSpec<ActionState>
   & {
     multipleValues?: false;
@@ -415,7 +339,7 @@ export type ValueSpec<ActionState extends ContextState = EmptyObject> =
     properties?: undefined;
   };
 
-export type ArraySpec<ActionState extends ContextState = EmptyObject> =
+export type ArraySpec<ActionState extends ContextState = ContextState> =
   & BaseSpec<ActionState>
   & {
     multipleValues: true;
@@ -458,7 +382,7 @@ export type ObjectArraySpec<
  * @todo Support ActionState typing the Transformed func
  */
 export type PropertySpec<
-  ActionState extends ContextState = EmptyObject,
+  ActionState extends ContextState = ContextState,
   RecursionCount extends RecursiveDigit | 'STOP' = 7,
 > =
   // RecursionCount extends 'STOP' ? (
@@ -472,7 +396,7 @@ export type PropertySpec<
 //   | ObjectArraySpec<ActionState>
 // )
 
-export type ActionSpec<ActionState extends ContextState = EmptyObject> = {
+export type ActionSpec<ActionState extends ContextState = ContextState> = {
   [term: string]: PropertySpec<ActionState>;
 };
 
@@ -486,8 +410,8 @@ export type PropertySpecResult<PropertySpecItem extends PropertySpec> =
       TransformTo,
       State
     > ? TransformTo
-    : PropertySpecItem['validator'] extends ValidatorFn<FileInput, Value> ? Value
-    : FileInput
+    : PropertySpecItem['validator'] extends ValidatorFn<FileValue, Value> ? Value
+    : FileValue
     : PropertySpecItem extends FileMultiSpec<
       infer Value,
       infer TransformTo,
@@ -497,8 +421,8 @@ export type PropertySpecResult<PropertySpecItem extends PropertySpec> =
         TransformTo,
         State
       > ? TransformTo
-      : PropertySpecItem['validator'] extends ValidatorFn<FileInput, Value> ? Value[]
-      : FileInput[]
+      : PropertySpecItem['validator'] extends ValidatorFn<FileValue, Value> ? Value[]
+      : FileValue[]
     : PropertySpecItem extends BooleanSingleSpec<
       infer Value,
       infer TransformTo,
@@ -631,18 +555,4 @@ export type ResponseInputSpec = {
 export type SpecValue = {
   [key: string]: SpecValue | ActionOptions<JSONValue> | ResponseInputSpec;
 }
-
-export type ProblemDetailsParam = {
-  name: string;
-  reason: string;
-  pointer?: string;
-};
-
-export type ProblemDetails = {
-  title: string;
-  type?: string;
-  detail?: string;
-  instance?: string;
-  errors?: Array<ProblemDetailsParam>;
-};
 
