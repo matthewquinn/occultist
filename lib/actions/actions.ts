@@ -3,7 +3,7 @@ import type { Registry } from '../registry/registry.ts';
 import type { Scope } from "../scopes/scopes.ts";
 import type { ContextState, ActionSpec } from "./spec.ts";
 import type { Context } from "./context.ts";
-import { HandleArgs } from "../types.ts";
+
 
 export type HandlerFn<
   State extends ContextState = ContextState,
@@ -367,16 +367,7 @@ export class Action<
   }
 
   handle(
-    contentType: string | string[],
-    handler: HandlerFn<State>,
-  ): FinalizedAction<State>;
-
-  handle(
-    args: HandleArgs<State>,
-  ): FinalizedAction<State>;
-
-  handle(
-    arg1: string | string[] | HandleArgs<State>,
+    arg1: string | string[] | HandlerArgs<State>,
     arg2?: HandlerFn<State>,
   ): FinalizedAction<State> {
     return this.#meta.action = FinalizedAction.fromHandlers(
@@ -388,12 +379,13 @@ export class Action<
   }
 }
 
-export class PreAction implements
+export class PreAction<
+  State extends ContextState = ContextState,
+> implements
   Applicable<Action>,
-  Definable<DefinedAction>,
-  Handleable<FinalizedAction>
+  Handleable<State>
 {
-  #meta: ActionMeta;
+  #meta: ActionMeta<State>;
 
   constructor(
     meta: ActionMeta,
@@ -407,30 +399,35 @@ export class PreAction implements
     );
   }
 
-  define(): DefinedAction {
-    return this.#meta.action = new DefinedAction(
-      this.#meta,
+  define<
+    Spec extends ActionSpec = ActionSpec,
+  >(spec: Spec): DefinedAction<State, Spec> {
+    return new DefinedAction<State, Spec>(
+      spec,
+      this.#meta as ActionMeta<State, Spec>,
     );
   }
 
   handle(
-    contentType: string | string[],
-    handler: HandlerFn,
-  ): FinalizedAction {
-    return this.#meta.action = new FinalizedAction(
+    arg1: string | string[] | HandlerArgs<State>,
+    arg2?: HandlerFn<State>,
+  ): FinalizedAction<State> {
+    return this.#meta.action = FinalizedAction.fromHandlers(
+      {},
       this.#meta,
-      contentType,
-      handler,
+      arg1 as string,
+      arg2 as HandlerFn<State>,
     );
   }
 }
 
-export class Endpoint implements
+export class Endpoint<
+  State extends ContextState = ContextState,
+> implements
   Applicable<Action>,
-  Definable<DefinedAction>,
-  Handleable<FinalizedAction>
+  Handleable<State>
 {
-  #meta: ActionMeta;
+  #meta: ActionMeta<State>;
 
   constructor(
     meta: ActionMeta,
@@ -465,26 +462,30 @@ export class Endpoint implements
     return this;
   }
 
-  use(): Action {
+  use(): Action<State> {
     return this.#meta.action = new Action(
       this.#meta,
     );
   }
 
-  define(): DefinedAction {
-    return this.#meta.action = new DefinedAction(
-      this.#meta,
+  define<
+    Spec extends ActionSpec = ActionSpec,
+  >(spec: Spec): DefinedAction<State, Spec> {
+    return this.#meta.action = new DefinedAction<State, Spec>(
+      spec,
+      this.#meta as ActionMeta<State, Spec>,
     );
   }
 
   handle(
-    contentType: string | string[],
-    handler: HandlerFn,
-  ): FinalizedAction {
-    return this.#meta.action = new FinalizedAction(
+    arg1: string | string[] | HandlerArgs<State>,
+    arg2?: HandlerFn<State>,
+  ): FinalizedAction<State> {
+    return this.#meta.action = FinalizedAction.fromHandlers(
+      {},
       this.#meta,
-      contentType,
-      handler,
+      arg1 as string,
+      arg2 as HandlerFn<State>,
     );
   }
 }
