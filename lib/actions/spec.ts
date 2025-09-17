@@ -325,7 +325,7 @@ export type BaseSpec<
     parseFailureStatus?: number;
   }
   & (
-    | { typeDef: TypeDef; type?: undefined }
+    | { typeDef?: TypeDef; type?: undefined }
     | { type: string; typeDef?: undefined }
   )
   & SpecOptions<ActionState>;

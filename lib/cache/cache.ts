@@ -3,6 +3,19 @@ import { ConditionalRequestRules } from './etag.ts';
 import type { CacheHTTPArgs, CacheETagArgs, CacheStoreArgs, CacheEntryDescriptor, CacheMeta, CacheStorage, CacheContext } from './types.ts';
 
 
+export type CacheArgs<
+  StorageKey extends string = string,
+> =
+  & {
+    cache: Cache;
+  }
+  & (
+    | CacheHTTPArgs
+    | CacheETagArgs
+    | CacheStoreArgs<StorageKey>
+  );
+
+
 export class Cache<
   StorageKey extends string = string,
 > {
@@ -33,15 +46,15 @@ export class Cache<
     return this.#alternatives;
   }
 
-  http(args: CacheHTTPArgs): CacheHTTPArgs & { cache: Cache } {
+  http(args?: CacheHTTPArgs): CacheArgs {
     return Object.assign(Object.create(null), args, { cache: this });
   }
 
-  etag(args: CacheETagArgs): CacheETagArgs & { cache: Cache } {
+  etag(args?: CacheETagArgs): CacheArgs {
     return Object.assign(Object.create(null), args, { cache: this });
   }
 
-  store(args: CacheStoreArgs<StorageKey>): CacheStoreArgs<StorageKey> & { cache: Cache } {
+  store(args?: CacheStoreArgs<StorageKey>): CacheStoreArgs<StorageKey> & { cache: Cache } {
     return Object.assign(Object.create(null), args, { cache: this });
   }
 

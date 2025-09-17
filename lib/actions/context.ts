@@ -2,7 +2,8 @@ import type { ReadStream } from "node:fs";
 import type { Handler, ImplementedAction } from "./actions.ts";
 import type { Registry } from "../registry/registry.ts";
 import type { JSONValue } from "../jsonld.ts";
-import type { ActionSpec, ContextState } from "./spec.ts";
+import type { ActionSpec, ContextState, ObjectSpec, ObjectArraySpec, PropertySpecResult } from "./spec.ts";
+
 
 
 export interface WrappedRequest {
@@ -18,13 +19,28 @@ export interface WrappedResponse {
   readonly headers: Headers;
 };
 
+export type ActionPayload<
+  Spec extends ActionSpec = ActionSpec,
+> = {
+  [
+    Term in keyof Spec as Spec[Term] extends { internalTerm: string }
+      ? Spec[Term]['internalTerm']
+      : Term
+  ]: Spec[Term] extends ObjectArraySpec
+    ? Array<ActionPayload<Spec[Term]['properties']>>
+    : Spec[Term] extends ObjectSpec ? ActionPayload<Spec[Term]['properties']>
+    : PropertySpecResult<Spec[Term]>;
+};
+
+
 export type ContextArgs<
+  State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,
 > = {
   iri: string;
   public: boolean;
   authKey: string;
-  handler: Handler<ImplementedAction<Spec>>;
+  handler: Handler<State, Spec>;
   request: WrappedRequest;
   response: WrappedResponse;
 };
@@ -41,13 +57,13 @@ export class Context<
   #public: boolean = false
   #authKey?: string;
   #state: State = new Map() as State;
-  #action: ImplementedAction<Spec>;
+  #action: ImplementedAction<State, Spec>;
   #registry: Registry;
-  #handler: Handler<ImplementedAction<Spec>>;
+  #handler: Handler<State, Spec>;
   #request: WrappedRequest;
   #response: WrappedResponse;
 
-  constructor(args: ContextArgs<Spec>) {
+  constructor(args: ContextArgs<State, Spec>) {
     this.#iri = args.iri;
     this.#public = args.public;
     this.#authKey = args.authKey;
@@ -74,7 +90,7 @@ export class Context<
     return this.#state;
   }
 
-  get action(): ImplementedAction {
+  get action(): ImplementedAction<State, Spec> {
     return this.#action;
   }
 
@@ -82,7 +98,7 @@ export class Context<
     return this.#registry;
   }
 
-  get handler(): Handler {
+  get handler(): Handler<State, Spec> {
     return this.#handler;
   }
 
@@ -92,6 +108,10 @@ export class Context<
 
   get response(): WrappedResponse {
     return this.#response;
+  }
+
+  get payload(): ActionPayload<Spec> {
+    throw new Error('Not defined');
   }
 
 }

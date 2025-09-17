@@ -1,4 +1,4 @@
-import { Action } from '../types.ts';
+import type { Action } from '../types.ts';
 
 
 export type CacheContext = {
@@ -7,6 +7,7 @@ export type CacheContext = {
   authKey?: string;
   req: Request;
   bodyStream: ReadableStream;
+  // deno-lint-ignore no-explicit-any
   payload: any;
 };
 
@@ -76,6 +77,7 @@ export type CacheHTTPArgs =
 export type CacheETagArgs =
   & CacheRuleArgs
   & Omit<CacheControlArgs, 'etag'>
+  & { strong?: boolean }
 ;
 
 export type CacheStoreArgs<

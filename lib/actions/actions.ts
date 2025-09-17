@@ -1,9 +1,16 @@
 import type { HintArgs } from './types.ts';
 import type { Registry } from '../registry/registry.ts';
 import type { Scope } from "../scopes/scopes.ts";
+import type { CacheArgs } from '../cache/cache.ts';
 import type { ContextState, ActionSpec } from "./spec.ts";
 import type { Context } from "./context.ts";
 
+
+export type DefineArgs<
+  Spec extends ActionSpec = ActionSpec,
+> = {
+  spec: Spec,
+};
 
 export type HandlerFn<
   State extends ContextState = ContextState,
@@ -45,7 +52,13 @@ export interface ImplementedAction<
   readonly registry: Registry;
   readonly scope?: Scope;
   readonly handlers: Handler<State, Spec>[];
+  url(): string;
 }
+
+export type Hints =
+  | HintArgs
+  | ((args: HintArgs) => void)
+;
 
 export class ActionMeta<
   State extends ContextState = ContextState,
@@ -194,6 +207,10 @@ export class FinalizedAction<
   get handlers(): Handler<State, Spec>[] {
     return this.#handlers;
   }
+ 
+  url(): string {
+    return '';
+  }
 
   handle(
     contentType: string | string[],
@@ -291,6 +308,10 @@ export class DefinedAction<
     return [];
   }
  
+  url(): string {
+    return '';
+  }
+
   use(): DefinedAction<State, Spec> {
     return this;
   }
@@ -353,15 +374,19 @@ export class Action<
     return [];
   }
 
+  url(): string {
+    return '';
+  }
+
   use(): Action<State> {
     return this;
   }
 
   define<
     Spec extends ActionSpec = ActionSpec,
-  >(spec: Spec): DefinedAction<State, Spec> {
+  >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
     return this.#meta.action = new DefinedAction<State, Spec>(
-      spec,
+      args.spec,
       this.#meta as ActionMeta<State, Spec>,
     );
   }
@@ -401,9 +426,9 @@ export class PreAction<
 
   define<
     Spec extends ActionSpec = ActionSpec,
-  >(spec: Spec): DefinedAction<State, Spec> {
+  >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
     return new DefinedAction<State, Spec>(
-      spec,
+      args.spec,
       this.#meta as ActionMeta<State, Spec>,
     );
   }
@@ -435,8 +460,10 @@ export class Endpoint<
     this.#meta = meta;
   }
   
-  hint(hints: HintArgs) {
+  hint(hints: HintArgs | ((hints: HintArgs) => void)): Endpoint<State> {
     this.#meta.hints.push(hints);
+
+    return this;
   }
 
   transform(
@@ -453,8 +480,14 @@ export class Endpoint<
 
     return this;
   }
+
+  compress(): Endpoint<State> {
+    return this;
+  }
   
-  cache() {
+  cache<
+    StorageKey extends string = string,
+  >(args: CacheArgs<StorageKey>) {
     return this;
   }
 
@@ -470,9 +503,9 @@ export class Endpoint<
 
   define<
     Spec extends ActionSpec = ActionSpec,
-  >(spec: Spec): DefinedAction<State, Spec> {
+  >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
     return this.#meta.action = new DefinedAction<State, Spec>(
-      spec,
+      args.spec,
       this.#meta as ActionMeta<State, Spec>,
     );
   }
