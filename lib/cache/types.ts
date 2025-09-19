@@ -64,7 +64,7 @@ export type CacheControlArgs = {
   noTransform?: true;
   immutable?: true;
   proxyRevalidate?: true;
-  expires?: () => number | Temporal;
+  expires?: () => number | Date | Temporal.ZonedDateTime;
   maxAge?: number | Temporal.Duration | (() => number | Temporal.Duration);
   etag?: string;
 };

@@ -32,7 +32,6 @@ export type ActionPayload<
     : PropertySpecResult<Spec[Term]>;
 };
 
-
 export type ContextArgs<
   State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,

@@ -1,15 +1,21 @@
-import type { ServerResponse } from 'node:http';
+import { ServerResponse } from 'node:http';
 import type { HintLink, HintArgs } from './types.ts';
 
 
 export class Writer {
 
-  #res: ServerResponse;
+  #res?: ServerResponse;
   #hints?: {
     link: string | string[];
   };
+  #status?: number;
+  #statusText?: string;
+  #headers: Headers = new Headers();
+  #body?: BodyInit;
 
-  constructor(res: ServerResponse) {
+  constructor(
+    res?: ServerResponse,
+  ) {
     this.#res = res;
   }
 
@@ -21,6 +27,7 @@ export class Writer {
    * instead.
    */
   writeEarlyHints(args: HintArgs) {
+    const res = this.#res;
     let link: string | string[];
 
     if (Array.isArray(args.link)) {
@@ -35,7 +42,7 @@ export class Writer {
       link: string | string[];
     } = { link };
 
-    if (this.#res.writeEarlyHints == null) {
+    if (res == null || res.writeEarlyHints == null) {
       this.#hints = hints;
 
       return;
@@ -43,24 +50,67 @@ export class Writer {
 
     return new Promise<void>((resolve, reject) => {
       try {
-        this.#res.writeEarlyHints(hints, resolve)
+        res.writeEarlyHints(hints, resolve)
       } catch (err) {
         reject(err);
       }
     });
   }
 
-  writeHead(statusCode: number) {
-      console.log('HINTS', this.#hints);
-    if (this.#hints != null) {
-      this.#res.writeHead(statusCode, this.#hints);
-    } else {
-      this.#res.writeHead(statusCode);
+  writeHead(status: number, {
+    statusText,
+    headers,
+  }: {
+    statusText?: string;
+    headers?: Headers;
+  } = {}) {
+    const res = this.#res;
+
+    this.#status = status;
+    this.#statusText = statusText
+   
+    if (headers != null) {
+      this.#setHeaders(headers);
+    }
+
+    if (res instanceof ServerResponse && this.#hints != null) {
+      res.writeHead(status, statusText, this.#hints);
+    } else if (res instanceof ServerResponse) {
+      res.writeHead(status, statusText);
     }
   }
 
-  writeBody(body: ReadableStream) {
-    this.#res.end(body)
+  write(body: ReadableStream): void {
+    if (this.#res instanceof ServerResponse) {
+      this.#res.write(body);
+    }
+  }
+
+  toResponse(): Response | null {
+    if (this.#res instanceof ServerResponse) {
+      return null;
+    }
+
+    return new Response(this.#body, {
+      status: this.#status,
+      statusText: this.#statusText,
+      headers: this.#headers,
+    });
+  }
+
+  #setHeaders(headers: Headers): void {
+    for (const [header, value] of headers.entries()) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          this.#headers.append(header, item);
+        }
+      } else {
+        this.#headers.append(header, value);
+      }
+    }
+  }
+
+  #writeHintsToHeaders(hints: HintArgs): void {
   }
 
   #formatEarlyHint(hint: HintLink): string {

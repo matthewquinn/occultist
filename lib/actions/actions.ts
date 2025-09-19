@@ -6,6 +6,172 @@ import type { ContextState, ActionSpec } from "./spec.ts";
 import type { Context } from "./context.ts";
 
 
+export class Accept {
+  #acceptRe = /([^,; ]+)(;q=(\d(\.\d+)?))?/g;
+  accept: string[] = [];
+  acceptCache: Set<string> = new Set();
+  acceptLanguage: string[] = [];
+  acceptLanguageCache: Set<string> = new Set();
+  acceptEncoding: string[] = [];
+  acceptEncodingCache: Set<string> = new Set();
+
+  constructor(
+    accept: string | null,
+    acceptLanguage: string | null,
+    acceptEncoding: string | null,
+  ) {
+    [this.accept, this.acceptCache] = this.#process(accept);
+    [this.acceptLanguage, this.acceptLanguageCache] = this.#process(acceptLanguage);
+    [this.acceptEncoding, this.acceptEncodingCache] = this.#process(acceptEncoding);
+  }
+
+  #process(header: string | null): [string[], Set<string>] {
+    if (header == null) {
+      return [[], new Set('*/*')];
+    }
+
+    let match: RegExpExecArray | null;
+
+    const items: Array<{ ct: string, q: number }> = [];
+    const cache = new Set<string>();
+
+    while ((match = this.#acceptRe.exec(header))) {
+      const ct = match[0];
+      const q = Number(match[2] ?? 1);
+
+      cache.add(ct);
+      items.push({ ct, q });
+    }
+    
+    return [
+      items.toSorted((a, b) => a.q - b.q)
+        .map(({ ct }) => ct),
+      cache,
+    ];
+  }
+}
+
+export type UnsupportedContentTypeMatch = {
+  type: 'unsupported-content-type';
+  contentTypes: string[];
+};
+
+export type ActionAcceptMatch = {
+  type: 'match';
+  action: ImplementedAction;
+  contentType?: string;
+  language?: string;
+  encoding?: string;
+};
+
+export type ActionMatchResult =
+  | UnsupportedContentTypeMatch
+  | ActionAcceptMatch
+;
+
+export class ActionSet {
+  #rootIRI: string;
+  #method: string;
+  #urlPattern: URLPattern;
+  #meta: ActionMeta[];
+  #typeRe = /^([^\/]+)\/\*$/;
+
+  constructor(
+    rootIRI: string,
+    method: string,
+    path: string,
+    meta: ActionMeta[],
+  ) {
+    this.#rootIRI = rootIRI;
+    this.#method = method;
+    this.#meta = meta;
+
+    this.#urlPattern = new URLPattern({
+      baseURL: rootIRI,
+      pathname: path,
+    });
+  }
+
+  matches(method: string, path: string, accept: Accept): null | ActionMatchResult {
+    if (method !== this.#method) {
+      return null;
+    } else if (!this.#urlPattern.test(path, this.#rootIRI)) {
+      return null;
+    }
+
+    let contentTypes: string[] = [];
+    const matches: ActionMeta[] = [];
+
+    for (let index = 0; index < this.#meta.length; index++) {
+      const item = this.#meta[index];
+
+      if (item.allowsPublicAccess) {
+        const action = item.action as unknown as ImplementedAction;
+
+        contentTypes = contentTypes.concat(action.contentTypes);
+      }
+
+      // find actions where there is at least one accept match
+      if (item.acceptCache.intersection(accept.acceptCache).size !== 0) {
+        matches.push(item);
+      }
+    }
+
+    if (matches.length === 0 && contentTypes.length !== 0) {
+      return {
+        type: 'unsupported-content-type',
+        contentTypes,
+      };
+    } else if (matches.length === 0) {
+      return null;
+    }
+      
+    for (const item of accept.accept) {
+      const matchesAll = item === '*/*';
+      const [mimeType] = this.#typeRe.exec(item) ?? [];
+
+      if (matchesAll) {
+        const action = matches[0].action as unknown as ImplementedAction;
+        const contentType = action.contentTypes[0];
+
+        return {
+          type: 'match',
+          action,
+          contentType,
+        };
+      }
+
+      for (const meta of matches) {
+        const action = meta.action as unknown as ImplementedAction;
+
+        if (mimeType != null) {
+          for (const contentType of action.contentTypes) {
+            if (contentType.startsWith(mimeType)) {
+              return {
+                type: 'match',
+                action,
+                contentType,
+              };
+            }
+          }
+        } else {
+          for (const contentType of action?.contentTypes) {
+            if (contentType === item) {
+              return {
+                type: 'match',
+                action,
+                contentType,
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+}
+
 export type DefineArgs<
   Spec extends ActionSpec = ActionSpec,
 > = {
@@ -52,6 +218,8 @@ export interface ImplementedAction<
   readonly registry: Registry;
   readonly scope?: Scope;
   readonly handlers: Handler<State, Spec>[];
+  readonly contentTypes: string[];
+
   url(): string;
 }
 
@@ -72,6 +240,8 @@ export class ActionMeta<
   scope?: Scope;
   registry: Registry;
   action?: ImplementedAction<State, Spec>;
+  acceptCache = new Set<string>();
+  allowsPublicAccess = false;
 
   constructor(
     method: string,
@@ -85,6 +255,28 @@ export class ActionMeta<
     this.path = path;
     this.scope = scope;
     this.registry = registry;
+  }
+
+  /**
+   * Called when the API is defined to compute all uncomputed values.
+   */
+  finalize() {
+    this.#setAcceptCache();
+  }
+
+  #setAcceptCache(): void {
+    const action = this.action;
+
+    if (action == null) {
+      return;
+    }
+
+    this.acceptCache.add('*/*');
+
+    for (const contentType of action.contentTypes) {
+      this.acceptCache.add(contentType);
+      this.acceptCache.add(contentType.replace(/[^/]+$/, '*'));
+    }
   }
 }
 
@@ -109,7 +301,6 @@ export class FinalizedAction<
   Handleable<State, Spec>,
   ImplementedAction<State, Spec>
 {
-  
   #spec: Spec;
   #meta: ActionMeta<State, Spec>;
   #handlers: Handler<State, Spec>[];
@@ -531,10 +722,18 @@ export class ActionAuth {
   }
 
   public(): Endpoint {
+    this.#meta.allowsPublicAccess = true;
+    
     return new Endpoint(this.#meta);
   }
 
   auth(): Endpoint {
+    return new Endpoint(this.#meta);
+  }
+
+  optionalAuth(): Endpoint {
+    this.#meta.allowsPublicAccess = true;
+
     return new Endpoint(this.#meta);
   }
 }
