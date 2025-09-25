@@ -1,20 +1,25 @@
-import { ActionMeta, ActionAuth, type ImplementedAction, type Handler } from "../actions/actions.ts";
+import { ActionAuth } from "../actions/actions.ts";
+import { ActionMeta } from "../actions/meta.ts";
+import type { Handler, ImplementedAction } from "../actions/types.ts";
+import type { HTTPWriter } from "../actions/writer.ts";
 import { type Callable, HTTP, type Registry } from '../registry/registry.ts';
 
 
 export class Scope implements Callable {
-
   #path: string;
   #registry: Registry;
+  #writer: HTTPWriter;
   #http: HTTP;
   #children: Array<ActionMeta> = [];
   
   constructor(
     path: string,
     registry: Registry,
+    writer: HTTPWriter,
   ) {
     this.#path = path;
     this.#registry = registry;
+    this.#writer = writer;
     this.#http = new HTTP(this);
   }
 
@@ -50,7 +55,7 @@ export class Scope implements Callable {
     return this;
   }
 
-  auth(): Scope {
+  private(): Scope {
     return this;
   }
 
@@ -63,10 +68,12 @@ export class Scope implements Callable {
    */
   method(method: string, name: string, path: string): ActionAuth {
     const meta = new ActionMeta(
+      this.#registry.rootIRI,
       method,
       name,
       path,
       this.#registry,
+      this.#writer,
       this,
     );
 

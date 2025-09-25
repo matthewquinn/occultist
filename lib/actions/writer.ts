@@ -2,7 +2,13 @@ import { ServerResponse } from 'node:http';
 import type { HintLink, HintArgs } from './types.ts';
 
 
-export class Writer {
+export interface HTTPWriter {
+  writeEarlyHints(args: HintArgs): void;
+  writeHead(status: number, headers?: Headers): void;
+  writeBody(body: ReadableStream): void;
+};
+
+export class FetchResponseWriter implements HTTPWriter {
 
   #res?: ServerResponse;
   #hints?: {
@@ -57,30 +63,23 @@ export class Writer {
     });
   }
 
-  writeHead(status: number, {
-    statusText,
-    headers,
-  }: {
-    statusText?: string;
-    headers?: Headers;
-  } = {}) {
+  writeHead(status: number, headers?: Headers) {
     const res = this.#res;
 
     this.#status = status;
-    this.#statusText = statusText
    
     if (headers != null) {
       this.#setHeaders(headers);
     }
 
     if (res instanceof ServerResponse && this.#hints != null) {
-      res.writeHead(status, statusText, this.#hints);
+      res.writeHead(status, this.#hints);
     } else if (res instanceof ServerResponse) {
-      res.writeHead(status, statusText);
+      res.writeHead(status);
     }
   }
 
-  write(body: ReadableStream): void {
+  writeBody(body: ReadableStream): void {
     if (this.#res instanceof ServerResponse) {
       this.#res.write(body);
     }
@@ -108,9 +107,6 @@ export class Writer {
         this.#headers.append(header, value);
       }
     }
-  }
-
-  #writeHintsToHeaders(hints: HintArgs): void {
   }
 
   #formatEarlyHint(hint: HintLink): string {

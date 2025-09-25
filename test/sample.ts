@@ -2,6 +2,7 @@
 import { createReadStream } from 'node:fs';
 import { Registry } from '../lib/registry/registry.ts';
 import { Cache } from '../lib/cache/cache.ts';
+import { ActionSpec } from "../lib/actions/spec.ts";
 
 const cache = new Cache();
 
@@ -57,5 +58,47 @@ publicScope.http.post('create-session', '/public/sessions')
   });
 
 privateScope.http.get('index-page', '/')
-  .auth()
+  .public()
   .cache(cache.store())
+
+const searchRecipesSpec = {
+  visualization: { type: 'string', options: ['bar-chart', 'scatter-plot'] },
+  search: { type: 'string', valueMinLength: 3 },
+  filter: { type: 'string' },
+  startTime: { type: 'string', transformer: Date },
+  endTime: { type: 'string', transformer: Date },
+} satisfies ActionSpec;
+
+privateScope.http.get(
+    'get-search-recipes-page',
+    '/recipes'
+      + '{?visualization,search,filter,startTime,endTime}'
+  )
+  .public(auth.recipes())
+  .hint('text/html', () => {})
+  .define({
+    spec: searchRecipesSpec,
+  })
+  .handle(octironExt.handler('VisualizeRecipesPage'))
+  .handle(['application/ld+json', 'application/json'], async (ctx) => {})
+  .handle(['image/svg+xml', 'images/x-visualization+svg+xml'], async (ctx) => {
+    ctx.payload.startTime
+  });
+
+privateScope.http.get(
+    'search-recipes',
+    '/recipes'
+      + '{?visualization,search,filter,startTime,endTime}'
+      + '{#sliceStart,sliceEnd}',
+  )
+  .public(auth.recipes())
+  .cache(cache.etag())
+  .define({
+    spec: {
+      ...searchRecipesSpec,
+      sliceStart: { type: 'string' },
+      sliceEnd: { type: 'string' },
+    },
+  })
+  .handle('text/event-stream', async (ctx) => {})
+

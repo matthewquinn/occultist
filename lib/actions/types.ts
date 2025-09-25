@@ -1,23 +1,28 @@
-import type { Tagger } from '../cache/types.ts';
-import type { CacheMiddlewareArgs } from '../cache/cache.ts';
-import type { JSONObject } from "../jsonld.ts";
-import type { Registry } from '../registry/types.ts';
-import type { Scope } from "../scopes/types.ts";
+import type { Registry } from '../registry/registry.ts';
+import type { Scope } from "../scopes/scopes.ts";
+import type { ContextState, ActionSpec } from "./spec.ts";
+import type { Context } from "./context.ts";
+import { IncomingMessage, ServerResponse } from "node:http";
 
-export interface Handler {
+
+export type HandlerMeta = Map<symbol | string, string | string[]>;
+
+export type HandlerFn<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
+> = (ctx: Context<State, Spec>) => void;
+
+export interface Handler<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
+  Action extends ImplementedAction<State, Spec> = ImplementedAction<State, Spec>,
+> {
   readonly contentType: string;
   readonly name: string;
-  readonly action: ImplementedAction;
+  readonly meta: HandlerMeta;
+  readonly action: Action;
   readonly registry: Registry;
-}
-
-export interface ImplementedAction {
-  readonly name: string;
-  readonly partial: JSONObject;
-  readonly representation: JSONObject;
-  readonly registry: Registry;
-  readonly scope: Scope;
-  readonly handlers: Handler[];
+  readonly handler: HandlerFn<State, Spec>;
 }
 
 export type HintLink = {
@@ -34,45 +39,24 @@ export type HintArgs = {
   link: HintLink | HintLink[];
   csp?: string;
 };
+
 export type Middleware = () => void | Promise<void>;
+
 export type DefinedMiddleware = () => void | Promise<void>;
 
-export interface Action {
-  /**
-   * Makes this action public.
-   */
-  public(): AuthedAction;
-
-  /**
-   * Implements auth middleware which can optionally allow
-   * this action to be available to non logged-in users.
-   */
-  auth(middleware: AuthMiddleware): AuthedAction;
-};
-
-export interface AuthedAction<
-> extends CachedAction, DefinedAction {
-  hint(args: HintArgs): Action;
-  cache(args: CacheMiddlewareArgs): Omit<Action, 'auth' | 'cache' | 'etag'>;
-  etag(tagger: Tagger): Omit<Action, 'auth' | 'cache' | 'etag'>;
-};
-
-export interface CachedAction<
-> extends DefinedAction {
-  define(): Action;
-};
-
-export interface ActionMiddleware {
-  use(middleware: Middleware): AuthedAction;
-};
-
-export interface DefinedAction<
+export interface ImplementedAction<
+  State extends ContextState = ContextState,
+  Spec extends ActionSpec = ActionSpec,
 > {
-  handle(contentType: string, middleware: Middleware): DefinedAction;
-  handle(contentType: string[], middleware: Middleware): DefinedAction;
-};
+  readonly name: string;
+  readonly spec: Spec;
+  readonly registry: Registry;
+  readonly scope?: Scope;
+  readonly handlers: Handler<State, Spec>[];
+  readonly contentTypes: string[];
 
-export interface DefinedActionMiddleware {
-  use(middleware: Middleware): AuthedAction;
-};
+  url(): string;
+  handleRequest(req: Request, res?: undefined): Promise<Response>;
+  handleRequest(req: IncomingMessage, res: ServerResponse): Promise<ServerResponse>;
+}
 
