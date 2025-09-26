@@ -48,8 +48,7 @@ export class ContentTypeCache {
  * This accept object is created from a request before any content negotiation
  * begins allowing all subsequent checks to re-use the same caches header values.
  *
- * @todo Harden against DDOS attacks.
- * @todo Adds support for all accept headers.
+ * @todo Implement support for all accept headers.
  *
  * @param accept - The value of the request's accept header.
  * @param acceptLanguage - The value of the request's accept-language header.
@@ -59,19 +58,19 @@ export class Accept {
   #acceptRe = /(?<ct>[^,;\s]+)(;\s?q=(?<q>(\d(\.\d+)|(.\d))))?/g;
   #accept: string[] = [];
   #acceptCache: Set<string> = new Set();
-  #acceptLanguage: string[] = [];
-  #acceptLanguageCache: Set<string> = new Set();
-  #acceptEncoding: string[] = [];
-  #acceptEncodingCache: Set<string> = new Set();
+  //#acceptLanguage: string[] = [];
+  //#acceptLanguageCache: Set<string> = new Set();
+  //#acceptEncoding: string[] = [];
+  //#acceptEncodingCache: Set<string> = new Set();
 
   constructor(
     accept: string | null,
-    acceptLanguage: string | null,
-    acceptEncoding: string | null,
+    _acceptLanguage: string | null,
+    _acceptEncoding: string | null,
   ) {
     [this.#accept, this.#acceptCache] = this.#process(accept);
-    [this.#acceptLanguage, this.#acceptLanguageCache] = this.#process(acceptLanguage);
-    [this.#acceptEncoding, this.#acceptEncodingCache] = this.#process(acceptEncoding);
+    //[this.#acceptLanguage, this.#acceptLanguageCache] = this.#process(acceptLanguage);
+    //[this.#acceptEncoding, this.#acceptEncodingCache] = this.#process(acceptEncoding);
   }
 
   /**

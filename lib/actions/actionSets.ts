@@ -1,4 +1,4 @@
-import type { Accept } from "./accept.ts";
+import { ContentTypeCache, type Accept } from "../accept.ts";
 import type { ActionMeta } from "./meta.ts";
 import type { ImplementedAction } from "./types.ts";
 
@@ -28,8 +28,8 @@ export class ActionSet {
   #rootIRI: string;
   #method: string;
   #urlPattern: URLPattern;
-  #meta: ActionMeta[];
-  #typeRe = /^([^\/]+)\/\*$/;
+  #contentTypeActionMap: Map<string, ImplementedAction>;
+  #ctc: ContentTypeCache;
 
   constructor(
     rootIRI: string,
@@ -39,12 +39,13 @@ export class ActionSet {
   ) {
     this.#rootIRI = rootIRI;
     this.#method = method;
-    this.#meta = meta;
 
     this.#urlPattern = new URLPattern({
       baseURL: rootIRI,
       pathname: path,
     });
+
+    [this.#contentTypeActionMap, this.#ctc] = this.#process(meta);
   }
 
   matches(method: string, path: string, accept: Accept): null | ActionMatchResult {
@@ -54,76 +55,36 @@ export class ActionSet {
       return null;
     }
 
-    let contentTypes: string[] = [];
-    const matches: ActionMeta[] = [];
+    const contentType = accept.negotiate(this.#ctc);
+    const action = this.#contentTypeActionMap.get(contentType as string);
 
-    for (let index = 0; index < this.#meta.length; index++) {
-      const item = this.#meta[index];
-
-      if (item.allowsPublicAccess) {
-        const action = item.action as unknown as ImplementedAction;
-
-        contentTypes = contentTypes.concat(action.contentTypes);
-      }
-
-      // find actions where there is at least one accept match
-      if (item.acceptCache.intersection(accept.acceptCache).size !== 0) {
-        matches.push(item);
-      }
-    }
-
-    if (matches.length === 0 && contentTypes.length !== 0) {
+    if (contentType != null && action != null) {
       return {
-        type: 'unsupported-content-type',
-        contentTypes,
+        type: 'match',
+        action,
+        contentType,
       };
-    } else if (matches.length === 0) {
-      return null;
-    }
-      
-    for (const item of accept.accept) {
-      const matchesAll = item === '*/*';
-      const [mimeType] = this.#typeRe.exec(item) ?? [];
-
-      if (matchesAll) {
-        const action = matches[0].action as unknown as ImplementedAction;
-        const contentType = action.contentTypes[0];
-
-        return {
-          type: 'match',
-          action,
-          contentType,
-        };
-      }
-
-      for (const meta of matches) {
-        const action = meta.action as unknown as ImplementedAction;
-
-        if (mimeType != null) {
-          for (const contentType of action.contentTypes) {
-            if (contentType.startsWith(mimeType)) {
-              return {
-                type: 'match',
-                action,
-                contentType,
-              };
-            }
-          }
-        } else {
-          for (const contentType of action?.contentTypes) {
-            if (contentType === item) {
-              return {
-                type: 'match',
-                action,
-                contentType,
-              };
-            }
-          }
-        }
-      }
     }
 
     return null;
+  }
+
+  #process(meta: ActionMeta[]): [Map<string, ImplementedAction>, ContentTypeCache] {
+    const contentTypes: string[] = [];
+    const contentTypeActionMap: Map<string, ImplementedAction> = new Map();
+
+    for (let i = 0; i < meta.length; i++) {
+      const action = meta[i].action as ImplementedAction;
+
+      for (let j = 0; j < action.contentTypes.length; j++) {
+        const contentType = action.contentTypes[j];
+
+        contentTypes.push(contentType);
+        contentTypeActionMap.set(contentType, action);
+      }
+    }
+
+    return [contentTypeActionMap, new ContentTypeCache(contentTypes)];
   }
 }
 

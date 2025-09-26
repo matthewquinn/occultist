@@ -90,7 +90,7 @@ export class Registry implements Callable {
   #http: HTTP;
   #scopes: Scope[] = [];
   #children: ActionMeta[] = [];
-  #extensions: Map<string, string> = new Map();
+  //#extensions: Map<string, string> = new Map();
   #index?: IndexEntry;
   #writer = new FetchResponseWriter();
 
@@ -106,6 +106,7 @@ export class Registry implements Callable {
     const scope = new Scope(
       path,
       this,
+      this.#writer,
     );
 
     this.#scopes.push(scope);
@@ -149,13 +150,13 @@ export class Registry implements Callable {
     return this.actions.find((action) => action.name === actionName);
   }
 
-  extensions(extensions: ExtensionMap) {
-    this.#extensions = new Map(
-      Object.entries(extensions),
-    );
+  //extensions(extensions: ExtensionMap) {
+  //  this.#extensions = new Map(
+  //    Object.entries(extensions),
+  //  );
 
-    return this;
-  }
+  //  return this;
+  //}
 
   /**
    * Creates any HTTP method.
