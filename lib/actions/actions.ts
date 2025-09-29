@@ -1,9 +1,11 @@
-import type { Handler, HandlerFn, HandlerMeta, HintArgs, ImplementedAction } from './types.ts';
+import type { Handler, HandleRequestArgs, HandlerFn, HandlerMeta, HintArgs, ImplementedAction } from './types.ts';
 import type { Registry } from '../registry/registry.ts';
 import type { Scope } from "../scopes/scopes.ts";
 import type { CacheArgs } from '../cache/cache.ts';
 import type { ContextState, ActionSpec } from "./spec.ts";
 import type { ActionMeta } from "./meta.ts";
+import { IncomingMessage } from "node:http";
+import { ServerResponse } from "node:http";
 
 export type TransformerFn = () => void;
 export type DefineArgs<
@@ -59,7 +61,7 @@ export class FinalizedAction<
     this.#spec = spec;
     this.#meta = meta;
 
-    const handlers: Handler<State, Spec, FinalizedAction<State, Spec>>[] = [];
+    const handlers: Handler<State, Spec, ImplementedAction<State, Spec>>[] = [];
 
     if (typeof handlerArgs.contentType === 'string') {
       handlers.push({
@@ -67,7 +69,7 @@ export class FinalizedAction<
         handler: handlerArgs.handler,
         meta: new Map(Object.entries(handlerArgs.meta ?? new Map())),
         name: this.#meta.name,
-        action: this,
+        action: this as unknown as ImplementedAction<State, Spec>,
         registry: this.#meta.registry,
       });
     } else {
@@ -77,7 +79,7 @@ export class FinalizedAction<
           handler: handlerArgs.handler,
           name: this.#meta.name,
           meta: new Map(Object.entries(handlerArgs.meta ?? new Map())),
-          action: this,
+          action: this as unknown as ImplementedAction<State, Spec>,
           registry: this.#meta.registry,
         });
       }
@@ -125,8 +127,16 @@ export class FinalizedAction<
     return new FinalizedAction(spec, meta, arg3);
   }
 
+  get method(): string {
+    return this.#meta.method;
+  }
+
   get name(): string {
     return this.#meta.name;
+  }
+
+  get path(): string {
+    return this.#meta.pathTemplate;
   }
 
   get spec(): Spec {
@@ -185,7 +195,7 @@ export class FinalizedAction<
         contentType,
         name: this.#meta.name,
         meta,
-        action: this,
+        action: this as unknown as ImplementedAction<State, Spec>,
         registry: this.#meta.registry,
         handler,
       });
@@ -195,7 +205,7 @@ export class FinalizedAction<
           contentType: item,
           name: this.#meta.name,
           meta,
-          action: this,
+          action: this as unknown as ImplementedAction<State, Spec>,
           registry: this.#meta.registry,
           handler,
         });
@@ -203,6 +213,13 @@ export class FinalizedAction<
     }
 
     return this;
+  }
+
+  handleRequest(args: HandleRequestArgs) {
+    args.writer.writeHead(200);
+    args.writer.writeBody('hello 2');
+
+    return args.writer.response();
   }
 }
 
@@ -229,8 +246,16 @@ export class DefinedAction<
     this.#meta = meta;
   }
 
+  get method(): string {
+    return this.#meta.method;
+  }
+
   get name(): string {
     return this.#meta.name;
+  }
+
+  get path(): string {
+    return this.#meta.pathTemplate;
   }
 
   get spec(): Spec {
@@ -281,6 +306,13 @@ export class DefinedAction<
       arg2 as HandlerFn<State, Spec>,
     );
   }
+
+  async handleRequest(args: HandleRequestArgs) {
+    await args.writer.writeHead(200);
+    await args.writer.writeBody('hello 2');
+
+    return args.res;
+  }
 }
 
 export class Action<
@@ -299,8 +331,16 @@ export class Action<
     this.#meta = meta;
   }
 
+  get method(): string {
+    return this.#meta.method;
+  }
+
   get name(): string {
     return this.#meta.name;
+  }
+
+  get path(): string {
+    return this.#meta.pathTemplate;
   }
 
   get spec(): ActionSpec {
@@ -350,6 +390,13 @@ export class Action<
       arg1 as string,
       arg2 as HandlerFn<State>,
     );
+  }
+
+  async handleRequest(args: HandleRequestArgs) {
+    await args.writer.writeHead(200);
+    await args.writer.writeBody('hello 2');
+
+    return args.res;
   }
 }
 

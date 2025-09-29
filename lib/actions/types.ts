@@ -1,8 +1,8 @@
-import type { Registry } from '../registry/registry.ts';
-import type { Scope } from "../scopes/scopes.ts";
+import type { Registry } from '../registry.ts';
+import type { Scope } from "../scopes.ts";
 import type { ContextState, ActionSpec } from "./spec.ts";
 import type { Context } from "./context.ts";
-import { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage, OutgoingMessage, ServerResponse } from "node:http";
 
 
 export type HandlerMeta = Map<symbol | string, string | string[]>;
@@ -44,11 +44,37 @@ export type Middleware = () => void | Promise<void>;
 
 export type DefinedMiddleware = () => void | Promise<void>;
 
+export type HandleFetchRequestArgs = {
+  type: 'request';
+  contentType?: string;
+  language?: string;
+  encoding?: string;
+  req: Request;
+  writer: HTTPWriter;
+};
+
+export type HandleNodeHTTPRequestArgs = {
+  type: 'node-http';
+  contentType?: string;
+  language?: string;
+  encoding?: string;
+  req: IncomingMessage;
+  res: OutgoingMessage;
+  writer: HTTPWriter;
+};
+
+export type HandleRequestArgs =
+  | HandleFetchRequestArgs
+  | HandleNodeHTTPRequestArgs
+;
+
 export interface ImplementedAction<
   State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,
 > {
+  readonly method: string;
   readonly name: string;
+  readonly path: string;
   readonly spec: Spec;
   readonly registry: Registry;
   readonly scope?: Scope;
@@ -56,7 +82,6 @@ export interface ImplementedAction<
   readonly contentTypes: string[];
 
   url(): string;
-  handleRequest(req: Request, res?: undefined): Promise<Response>;
-  handleRequest(req: IncomingMessage, res: ServerResponse): Promise<ServerResponse>;
+  handleRequest(args: HandleRequestArgs): Promise<Response | ServerResponse>;
 }
 

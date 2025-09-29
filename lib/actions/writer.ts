@@ -2,13 +2,14 @@ import { ServerResponse } from 'node:http';
 import type { HintLink, HintArgs } from './types.ts';
 
 
-export interface HTTPWriter {
+export interface HTTPWriter<T> {
   writeEarlyHints(args: HintArgs): void;
   writeHead(status: number, headers?: Headers): void;
   writeBody(body: ReadableStream): void;
+  response(): T;
 };
 
-export class FetchResponseWriter implements HTTPWriter {
+export class FetchResponseWriter implements HTTPWriter<ServerResponse | Response> {
 
   #res?: ServerResponse;
   #hints?: {
@@ -82,12 +83,16 @@ export class FetchResponseWriter implements HTTPWriter {
   writeBody(body: ReadableStream): void {
     if (this.#res instanceof ServerResponse) {
       this.#res.write(body);
+    } else {
+      this.#body = body;
     }
   }
 
-  toResponse(): Response | null {
+  response(): Response | ServerResponse {
     if (this.#res instanceof ServerResponse) {
-      return null;
+      this.#res.end();
+      
+      return this.#res;
     }
 
     return new Response(this.#body, {

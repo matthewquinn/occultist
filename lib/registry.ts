@@ -1,241 +1,278 @@
-import { accepts } from "@std/http/negotiation";
-import { STATUS_CODE } from "@std/http/status";
-import { Buffer } from "node:buffer";
-import { joinPaths, ContentType, PreAction } from "./action.ts";
-import type { Aliases, EmptyObject, Merge, JSONObject, JSONLDContext, TypeDef } from "./jsonld.ts";
-import type { ContextState, Action, Middleware, ActionHTTPMethod, NextFn, Context } from "./types.ts";
-import { makeResponse } from "./utils/makeResponse.ts";
-import { urlToIRI } from "./utils/urlToIRI.ts";
-import { contextBuilder } from "./utils/contextBuilder.ts";
+import { Accept } from "./accept.ts";
+import { ActionAuth } from "./actions/actions.ts";
+import { type ActionMatchResult, ActionSet } from "./actions/actionSets.ts";
+import { ActionMeta } from "./actions/meta.ts";
+import { Path } from "./actions/path.ts";
+import type { Handler, ImplementedAction } from "./actions/types.ts";
+import { FetchResponseWriter } from "./actions/writer.ts";
+import { Scope } from './scopes.ts';
+import { IncomingMessage, type ServerResponse } from "node:http";
 
 
-export type Handler = {
-  contentType: string;
-  metadata: Record<string | symbol, any>;
+export type ExtensionMap = Record<string, string>;
+
+export interface Callable {
+  method(method: string, name: string, path: string): ActionAuth;
+}
+
+export class HTTP {
+
+  #callable: Callable;
+
+  constructor(callable: Callable) {
+    this.#callable = callable;
+  }
+
+  trace(name: string, path: string): ActionAuth {
+    return this.#callable.method('trace', name, path);
+  }
+
+  options(name: string, path: string): ActionAuth {
+    return this.#callable.method('options', name, path);
+  }
+
+  head(name: string, path: string): ActionAuth {
+    return this.#callable.method('head', name, path);
+  }
+
+  get(name: string, path: string): ActionAuth {
+    return this.#callable.method('get', name, path);
+  }
+
+  put(name: string, path: string): ActionAuth {
+    return this.#callable.method('put', name, path);
+  }
+
+  patch(name: string, path: string): ActionAuth {
+    return this.#callable.method('patch', name, path);
+  }
+
+  post(name: string, path: string): ActionAuth {
+    return this.#callable.method('post', name, path);
+  }
+
+  delete(name: string, path: string): ActionAuth {
+    return this.#callable.method('delete', name, path);
+  }
+
+}
+
+
+export type IndexMatchArgs = {
+  debug?: boolean;
 };
 
-export type ActionRegistryArgs = {
+export class IndexEntry {
+  #actionSets: ActionSet[];
+
+  constructor(actionSets: ActionSet[]) {
+    this.#actionSets = actionSets;
+  }
+
+  match(method: string, path: string, accept: Accept): null | ActionMatchResult {
+    for (let index = 0; index < this.#actionSets.length; index++) {
+      const actionSet = this.#actionSets[index];
+      const match = actionSet.matches(method, path, accept);
+
+      if (match != null) {
+        return match;
+      }
+    }
+
+    return null;
+  }
+}
+
+export type RegistryArgs = {
   rootIRI: string;
-  contextIRI: string;
-  typeDefs?: Record<string, TypeDef> | TypeDef[];
-  vocab?: string;
-  aliases?: Aliases;
-  actionPathPrefix: string;
-  useFileExtensions?: boolean;
 };
 
-export type RouteArgs = {
-  useFileExtensions?: boolean;
-  extensions?: Record<string, string>;
-};
+export class Registry implements Callable {
 
-export class ActionRegistry<const State extends ContextState = EmptyObject> {
+  #path: string;
   #rootIRI: string;
-  #contextIRI: string;
-  #urlPattern: URLPattern;
-  #vocab?: string;
-  #useFileExtensions?: boolean;
-  #aliases?: Aliases;
-  #typeDefs: Record<string, TypeDef> | TypeDef[] = [];
-  #actions: Array<Action> = [];
-  // deno-lint-ignore no-explicit-any
-  #middleware: Array<Middleware<any>> = [];
+  #http: HTTP;
+  #scopes: Scope[] = [];
+  #children: ActionMeta[] = [];
+  //#extensions: Map<string, string> = new Map();
+  #index?: IndexEntry;
+  #writer = new FetchResponseWriter();
 
-  public constructor(args: ActionRegistryArgs) {
+  constructor(args: RegistryArgs) {
+    const url = new URL(args.rootIRI);
+
     this.#rootIRI = args.rootIRI;
-    this.#contextIRI = args.contextIRI;
-    this.#vocab = args.vocab;
-    this.#typeDefs = args.typeDefs ?? [];
-    this.#aliases = args.aliases;
-    this.#useFileExtensions = args.useFileExtensions;
-    this.#urlPattern = new URLPattern({
-      baseURL: this.#rootIRI,
-      pathname: args.actionPathPrefix,
-    });
+    this.#path = url.pathname
+    this.#http = new HTTP(this);
   }
 
-  public use<MiddlewareState extends ContextState = State>(
-    middleware: Middleware<MiddlewareState>,
-  ): ActionRegistry<Merge<State, MiddlewareState>> {
-    this.#middleware.push(middleware);
+  scope(path: string) {
+    const scope = new Scope(
+      path,
+      this,
+      this.#writer,
+    );
 
-    return this as ActionRegistry<Merge<State, MiddlewareState>>;
+    this.#scopes.push(scope);
+    
+    return scope;
+  }
+  
+  get rootIRI(): string {
+    return this.#rootIRI;
   }
 
-  public get contextIRI(): string {
-    return this.#contextIRI;
+  get path(): string {
+    return this.#path;
   }
 
-  public get context(): JSONLDContext {
-    return contextBuilder({
-      vocab: this.#vocab,
-      aliases: this.#aliases,
-      typeDefs: this.#typeDefs,
-    });
+  get http(): HTTP {
+    return this.#http;
   }
 
-  public get vocab(): string | undefined {
-    return this.#vocab;
-  }
-
-  public get aliases(): Aliases | undefined {
-    return this.#aliases;
-  }
-
-  public get(name: string, path: string, args?: RouteArgs): PreAction<State> {
-    return this.#callMethod<'get'>('get', name, path, args);
-  }
-
-  public post(name: string, path: string, args?: RouteArgs): PreAction<State> {
-    return this.#callMethod<'post'>('post', name, path, args);
-  }
-
-  public put(name: string, path: string, args?: RouteArgs): PreAction<State> {
-    return this.#callMethod<'put'>('put', name, path, args);
-  }
-
-  public delete(name: string, path: string, args?: RouteArgs): PreAction<State> {
-    return this.#callMethod<'delete'>('delete', name, path, args);
-  }
-
-  public get handlers(): Handler[] {
-    const handlers: Handler[] = [];
-
-    for (const action of this.#actions) {
-    }
-
-    return handlers;
-  }
-
-  public body(): JSONObject {
-    const body: JSONObject = {
-      '@id': joinPaths(this.#rootIRI, this.#urlPattern.pathname),
-    };
-
-    for (const action of this.#actions) {
-      const partial = action.partial();
-
-      if (action.type && partial) {
-        body[action.type] = partial;
-      }
-    }
-
-    return body;
-  }
-
-  async #handleActionRequest(ctx: Context) {
-    if (this.#urlPattern.test(ctx.iri)) {
-      return new Response(Buffer.from(JSON.stringify(this.body())), {
-        headers: {
-          'content-type': ContentType.ApplicationJSONLD,
-        },
-      });
-    }
-
-    for (const action of this.#actions) {
-      if (action.actionIRI === ctx.iri.replace(/\/$/, '')) {
-        return new Response(Buffer.from(JSON.stringify(await action.body())), {
-          headers: {
-            'content-type': ContentType.ApplicationJSONLD,
-          },
-        });
-      }
-    }
-  }
-
-  public async handleRequest(req: Request): Promise<Response> {
-    const method = req.method as ActionHTTPMethod;
-    const iri = urlToIRI(req.url, this.#rootIRI);
-    const state = {};
-    const ctx: Context = {
-      method,
-      iri,
-      req,
-      state,
-      registry: this,
-      contentType: '',
-      headers: new Headers(),
-      bodySerialized: false,
-    };
-
-    try {
-      const url = new URL(iri);
-
-      if (
-        req.method === 'GET' &&
-        url.pathname.startsWith(this.#urlPattern.pathname) &&
-        accepts(req, ContentType.ApplicationJSONLD)
-      ) {
-        const res = await this.#handleActionRequest(ctx);
-
-        if (res) {
-          return res;
-        }
-      }
-
-      for (const action of this.#actions) {
-        const accept = action.accepts(ctx);
-
-        if (typeof accept !== 'string') {
-          continue;
+  get actions(): Array<ImplementedAction> {
+    const implemented = this.#children
+      .filter((meta) => {
+        if (meta.action == null) {
+          console.warn(`Action ${meta.method}: ${meta.path} not fully implemented before processing`);
         }
 
-        ctx.contentType = accept;
-        ctx.action = action;
+        return meta.action != null;
+      })
+      .map((meta) => meta.action) as Array<ImplementedAction>;
 
-        let next: NextFn = action.getNextFn(ctx);
-
-        for (const middleware of this.#middleware.toReversed()) {
-          const downstream = next;
-
-          next = async () => {
-            await middleware(ctx, downstream);
-          };
-        }
-
-        await next();
-
-        break;
-      }
-
-      return makeResponse(ctx);
-    } catch (err) {
-      console.log(err);
-      
-      return new Response(undefined, {
-        status: STATUS_CODE.NotFound,
-      });
-    }
+    return implemented.concat(
+      this.#scopes.flatMap((scope) => scope.actions)
+    );
   }
 
-  #callMethod<const Method extends ActionHTTPMethod>(
-    method: Method,
-    name: string,
-    path: string,
-    args: RouteArgs = {},
-  ): PreAction<State> {
-    const rootIRI = this.#rootIRI;
-    const actionPathPrefix = this.#urlPattern.pathname;
-    const urlPattern = new URLPattern(rootIRI + path);
-    const useFileExtensions = typeof args.useFileExtensions === 'boolean'
-      ? args.useFileExtensions
-      : this.#useFileExtensions;
+  get handlers(): Handler[] {
+    return this.actions.flatMap((action) => action.handlers);
+  }
 
-    const action = new PreAction<State>({
-      registry: this as unknown as ActionRegistry<EmptyObject>,
-      rootIRI,
-      vocab: this.#vocab,
-      aliases: this.#aliases,
-      actionPathPrefix,
-      method,
+  get(actionName: string): ImplementedAction | undefined {
+    return this.actions.find((action) => action.name === actionName);
+  }
+
+  //extensions(extensions: ExtensionMap) {
+  //  this.#extensions = new Map(
+  //    Object.entries(extensions),
+  //  );
+
+  //  return this;
+  //}
+
+  /**
+   * Creates any HTTP method.
+   *
+   * @param method The HTTP method.
+   * @param name   Name for the action being produced.
+   * @param path   Path the action responds to.
+   */
+  method(method: string, name: string, path: string): ActionAuth {
+    const meta = new ActionMeta(
+      this.#rootIRI,
+      method.toUpperCase(),
       name,
-      urlPattern,
-      ...args,
-      useFileExtensions,
-    });
+      path,
+      this,
+      this.#writer,
+    );
 
-    this.#actions.push(action);
-
-    return action;
+    this.#children.push(meta);
+    
+    return new ActionAuth(meta);
   }
+
+  finalize() {
+    const actionSets: ActionSet[] = [];
+    const groupedMeta = new Map<string, Map<string, ActionMeta[]>>();
+
+    for (let index = 0; index < this.#children.length; index++) {
+      const meta = this.#children[index];
+      const method = meta.method;
+      const normalizePath = Path.normalizePath(meta.pathTemplate);
+
+      meta.finalize();
+
+      const group = groupedMeta.get(normalizePath);
+      const methodSet = group?.get(method);
+
+      if (methodSet != null) {
+        methodSet.push(meta);
+      } else if (group != null) {
+        group.set(method, [meta]);
+      } else {
+        groupedMeta.set(normalizePath, new Map([[method, [meta]]]));
+      }
+    }
+
+    for (const [normalizePath, methodSet] of groupedMeta.entries()) {
+      for (const [method, meta] of methodSet.entries()) {
+        const actionSet = new ActionSet(
+          this.#rootIRI,
+          method,
+          normalizePath,
+          meta,
+        );
+
+        actionSets.push(actionSet);
+      }
+    }
+
+    this.#index = new IndexEntry(actionSets);
+  }
+
+  describeRoutes(): string {
+    let description = '';
+
+    for (const action of this.actions) {
+      for (const contentType of action.contentTypes) {
+        description += `${contentType} ${action.method} ${action.path}`;
+      }
+    }
+
+    return description;
+  }
+
+  handleRequest(
+    req: Request,
+  ): Promise<Response>;
+  
+  handleRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<ServerResponse>;
+
+  handleRequest(
+    req: Request | ServerResponse,
+    res?: ServerResponse,
+  ): Promise<Response | ServerResponse> {
+    const accept = Accept.from(req);
+    const match = this.#index?.match(
+      req.method ?? 'GET',
+      req.url ?? '/',
+      accept,
+    );
+    
+    if (match?.type === 'match' && req instanceof Request) {
+      return match.action.handleRequest({
+        type: 'request',
+        contentType: match.contentType,
+        req,
+        writer: new FetchResponseWriter(),
+      });
+    } else if (match?.type === 'match' && req instanceof IncomingMessage) {
+      return match.action.handleRequest({
+        type: 'node-http',
+        contentType: match.contentType,
+        req,
+        res,
+        writer: new FetchResponseWriter(res),
+      });
+    }
+
+    throw new Error('Not implemented');
+  }
+  
 }

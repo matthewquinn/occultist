@@ -1,0 +1,8 @@
+{
+  "name": "@occultist/occultist",
+  "type": "module",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.5.2"
+  }
+}

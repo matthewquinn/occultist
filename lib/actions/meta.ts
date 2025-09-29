@@ -1,7 +1,7 @@
-import type { Registry } from '../registry/registry.ts';
+import type { Registry } from '../registry.ts';
 import type { HintArgs, ImplementedAction } from './types.ts';
 import type { ContextState, ActionSpec } from './spec.ts';
-import type { Scope } from "../scopes/scopes.ts";
+import type { Scope } from "../scopes.ts";
 import type { Path } from "./path.ts";
 import type { HTTPWriter } from "./writer.ts";
 

@@ -1,8 +1,8 @@
-import { ActionAuth } from "../actions/actions.ts";
-import { ActionMeta } from "../actions/meta.ts";
-import type { Handler, ImplementedAction } from "../actions/types.ts";
-import type { HTTPWriter } from "../actions/writer.ts";
-import { type Callable, HTTP, type Registry } from '../registry/registry.ts';
+import { ActionAuth } from "./actions/actions.ts";
+import { ActionMeta } from "./actions/meta.ts";
+import type { Handler, ImplementedAction } from "./actions/types.ts";
+import type { HTTPWriter } from "./actions/writer.ts";
+import { type Callable, HTTP, type Registry } from './registry.ts';
 
 
 export class Scope implements Callable {
@@ -69,7 +69,7 @@ export class Scope implements Callable {
   method(method: string, name: string, path: string): ActionAuth {
     const meta = new ActionMeta(
       this.#registry.rootIRI,
-      method,
+      method.toUpperCase(),
       name,
       path,
       this.#registry,

@@ -1,9 +1,8 @@
 import type { ReadStream } from "node:fs";
-import type { Handler, ImplementedAction } from "./actions.ts";
-import type { Registry } from "../registry/registry.ts";
+import type { Handler, ImplementedAction } from "./types.ts";
+import type { Registry } from "../registry.ts";
 import type { JSONValue } from "../jsonld.ts";
 import type { ActionSpec, ContextState, ObjectSpec, ObjectArraySpec, PropertySpecResult } from "./spec.ts";
-
 
 
 export interface WrappedRequest {
@@ -37,7 +36,6 @@ export type ContextArgs<
   Spec extends ActionSpec = ActionSpec,
 > = {
   iri: string;
-  public: boolean;
   authKey: string;
   handler: Handler<State, Spec>;
   request: WrappedRequest;
@@ -64,7 +62,6 @@ export class Context<
 
   constructor(args: ContextArgs<State, Spec>) {
     this.#iri = args.iri;
-    this.#public = args.public;
     this.#authKey = args.authKey;
     this.#handler = args.handler;
     this.#action = args.handler.action;

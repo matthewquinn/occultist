@@ -1,5 +1,6 @@
 {
   "name": "@occultist/occultist",
+  "nodeModulesDir": "auto",
   "version": "0.0.1",
   "exports": "./lib/mod.ts",
   "tasks": {
@@ -10,6 +11,7 @@
     "@std/assert": "jsr:@std/assert@1",
     "@std/http": "jsr:@std/http@^1.0.19",
     "@sv2dev/multipart-stream": "jsr:@sv2dev/multipart-stream@^0.2.0",
+    "@types/node": "npm:@types/node@^24.5.2",
     "json-ptr": "npm:json-ptr@^3.1.1",
     "jsonld": "npm:jsonld@^8.3.3"
   }

@@ -1,4 +1,5 @@
 import { ContentTypeCache, type Accept } from "../accept.ts";
+import { makeURLPattern } from "../utils/makeURLPattern.ts";
 import type { ActionMeta } from "./meta.ts";
 import type { ImplementedAction } from "./types.ts";
 
@@ -40,10 +41,7 @@ export class ActionSet {
     this.#rootIRI = rootIRI;
     this.#method = method;
 
-    this.#urlPattern = new URLPattern({
-      baseURL: rootIRI,
-      pathname: path,
-    });
+    this.#urlPattern = makeURLPattern(path, rootIRI);
 
     [this.#contentTypeActionMap, this.#ctc] = this.#process(meta);
   }
