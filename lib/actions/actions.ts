@@ -1,11 +1,10 @@
-import type { Handler, HandleRequestArgs, HandlerFn, HandlerMeta, HintArgs, ImplementedAction } from './types.ts';
-import type { Registry } from '../registry/registry.ts';
-import type { Scope } from "../scopes/scopes.ts";
+import type { Handler, HandlerFn, HandlerMeta, HintArgs, ImplementedAction } from './types.ts';
+import type { Registry } from '../registry.ts';
+import type { Scope } from "../scopes.ts";
 import type { CacheArgs } from '../cache/cache.ts';
 import type { ContextState, ActionSpec } from "./spec.ts";
 import type { ActionMeta } from "./meta.ts";
-import { IncomingMessage } from "node:http";
-import { ServerResponse } from "node:http";
+import { Context } from './context.ts';
 
 export type TransformerFn = () => void;
 export type DefineArgs<
@@ -51,7 +50,7 @@ export class FinalizedAction<
 {
   #spec: Spec;
   #meta: ActionMeta<State, Spec>;
-  #handlers: Handler<State, Spec>[];
+  #handlers: Map<string, Handler<State, Spec, ImplementedAction<State, Spec>>>;
 
   constructor(
     spec: Spec,
@@ -61,10 +60,10 @@ export class FinalizedAction<
     this.#spec = spec;
     this.#meta = meta;
 
-    const handlers: Handler<State, Spec, ImplementedAction<State, Spec>>[] = [];
+    const handlers: Map<string, Handler<State, Spec, ImplementedAction<State, Spec>>> = new Map();
 
     if (typeof handlerArgs.contentType === 'string') {
-      handlers.push({
+      handlers.set(handlerArgs.contentType, {
         contentType: handlerArgs.contentType,
         handler: handlerArgs.handler,
         meta: new Map(Object.entries(handlerArgs.meta ?? new Map())),
@@ -74,7 +73,7 @@ export class FinalizedAction<
       });
     } else {
       for (const item of handlerArgs.contentType) {
-        handlers.push({
+        handlers.set(item, {
           contentType: item,
           handler: handlerArgs.handler,
           name: this.#meta.name,
@@ -152,11 +151,11 @@ export class FinalizedAction<
   }
   
   get handlers(): Handler<State, Spec>[] {
-    return this.#handlers;
+    return Array.from(this.#handlers.values());
   }
 
   get contentTypes(): string[] {
-    return this.#handlers.map((handler) => handler.contentType);
+    return Array.from(this.#handlers.keys());
   }
  
   url(): string {
@@ -191,7 +190,7 @@ export class FinalizedAction<
     }
 
     if (!Array.isArray(contentType)) {
-      this.#handlers.push({
+      this.#handlers.set(contentType, {
         contentType,
         name: this.#meta.name,
         meta,
@@ -201,7 +200,7 @@ export class FinalizedAction<
       });
     } else {
       for (const item of contentType) {
-        this.#handlers.push({
+        this.#handlers.set(item, {
           contentType: item,
           name: this.#meta.name,
           meta,
@@ -215,9 +214,18 @@ export class FinalizedAction<
     return this;
   }
 
-  handleRequest(args: HandleRequestArgs) {
-    args.writer.writeHead(200);
-    args.writer.writeBody('hello 2');
+  async handleRequest(args: HandleRequestArgs) {
+    const handler = this.#handlers.get(args.contentType) as Handler<State, Spec>;
+    const context = new Context({
+      url: args.req.url,
+      public: this.#meta.allowsPublicAccess,
+      handler,
+    });
+
+    await handler.handler(context);
+
+    args.writer.writeHead(context.status ?? 200, context.headers);
+    args.writer.writeBody(context.body);
 
     return args.writer.response();
   }
@@ -308,6 +316,9 @@ export class DefinedAction<
   }
 
   async handleRequest(args: HandleRequestArgs) {
+    const context = new Context({
+
+    })
     await args.writer.writeHead(200);
     await args.writer.writeBody('hello 2');
 
@@ -394,7 +405,7 @@ export class Action<
 
   async handleRequest(args: HandleRequestArgs) {
     await args.writer.writeHead(200);
-    await args.writer.writeBody('hello 2');
+    await args.writer.writeBody('hello 3');
 
     return args.res;
   }

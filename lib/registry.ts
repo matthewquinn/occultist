@@ -245,7 +245,7 @@ export class Registry implements Callable {
   ): Promise<ServerResponse>;
 
   handleRequest(
-    req: Request | ServerResponse,
+    req: Request | IncomingMessage,
     res?: ServerResponse,
   ): Promise<Response | ServerResponse> {
     const accept = Accept.from(req);
@@ -254,7 +254,7 @@ export class Registry implements Callable {
       req.url ?? '/',
       accept,
     );
-    
+
     if (match?.type === 'match' && req instanceof Request) {
       return match.action.handleRequest({
         type: 'request',
@@ -267,7 +267,7 @@ export class Registry implements Callable {
         type: 'node-http',
         contentType: match.contentType,
         req,
-        res,
+        res: res as ServerResponse,
         writer: new FetchResponseWriter(res),
       });
     }

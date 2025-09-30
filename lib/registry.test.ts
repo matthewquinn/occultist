@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import test from "node:test";
 import { Registry } from "./registry.ts";
 import { createServer } from "node:http";
@@ -9,7 +10,7 @@ const registry = new Registry({
 registry.http.get("get-index", "/")
   .public()
   .handle("text/plain", (ctx) => {
-    ctx.response.body = `Hello, world!`;
+    ctx.body = `Hello, world!`;
   });
 
 registry.finalize();
@@ -22,31 +23,29 @@ test("It responds to request objects", async () => {
     new Request("https://example.com"),
   );
 
-  console.log("REQUEST RESPONSE", await res.text());
+  assert(await res.text() === 'Hello, world!');
 });
 
 test("It responds to node incoming messages", async () => {
-  try {
-    return new Promise((resolve, reject) => {
-      const server = createServer();
+  const res = await new Promise<Response>((resolve, reject) => {
+    const server = createServer();
 
-      server.on("request", async (req, res) => {
-        await registry.handleRequest(req, res);
-      });
-
-      server.on("error", (err) => {
-        console.log("ERROR", err);
-        reject(err);
-      });
-
-      server.listen(0, "127.0.0.1", async () => {
-        const { port, address } = server.address();
-        const res = await fetch(`http://${address}:${port}`);
-
-        console.log("INCOMING MESSAGE RESPONSE", await res.text());
-      });
+    server.on("request", async (req, res) => {
+      await registry.handleRequest(req, res);
     });
-  } catch (err) {
-    console.error(err);
-  }
+
+    server.on("error", (err) => {
+      console.log("ERROR", err);
+      reject(err);
+    });
+
+    server.listen(0, "127.0.0.1", async () => {
+      const { port, address } = server.address();
+      const res = await fetch(`http://${address}:${port}`);
+
+      resolve(res);
+    });
+  });
+
+  assert(await res.text() === 'Hello, world!');
 });

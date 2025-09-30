@@ -5,19 +5,6 @@ import type { JSONValue } from "../jsonld.ts";
 import type { ActionSpec, ContextState, ObjectSpec, ObjectArraySpec, PropertySpecResult } from "./spec.ts";
 
 
-export interface WrappedRequest {
-  readonly body: ReadableStream;
-  readonly headers: Headers;
-}
-
-export interface WrappedResponse {
-  status?: number;
-  statusText?: string;
-  body: string | Blob | BufferSource | ReadStream | JSONValue;
-  contentType?: string;
-  readonly headers: Headers;
-};
-
 export type ActionPayload<
   Spec extends ActionSpec = ActionSpec,
 > = {
@@ -35,11 +22,10 @@ export type ContextArgs<
   State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,
 > = {
-  iri: string;
-  authKey: string;
+  url: string;
+  public: boolean;
+  authKey?: string;
   handler: Handler<State, Spec>;
-  request: WrappedRequest;
-  response: WrappedResponse;
 };
 
 export class Context<
@@ -49,25 +35,22 @@ export class Context<
 
   status?: number;
   statusText?: string;
+  headers = new Headers();
+  body?: null | string | Blob | Uint8Array | ReadStream;
 
-  #iri: string;
+  #url: string;
   #public: boolean = false
   #authKey?: string;
   #state: State = new Map() as State;
   #action: ImplementedAction<State, Spec>;
   #registry: Registry;
-  #handler: Handler<State, Spec>;
-  #request: WrappedRequest;
-  #response: WrappedResponse;
 
   constructor(args: ContextArgs<State, Spec>) {
-    this.#iri = args.iri;
+    this.#url = args.url;
+    this.#public = args.public;
     this.#authKey = args.authKey;
-    this.#handler = args.handler;
     this.#action = args.handler.action;
     this.#registry = args.handler.registry;
-    this.#request = args.request;
-    this.#response = args.response;
   }
 
   get public(): boolean {
@@ -78,8 +61,8 @@ export class Context<
     return this.#authKey;
   }
 
-  get iri(): string {
-    return this.#iri;
+  get url(): string {
+    return this.#url;
   }
 
   get state(): State {
@@ -92,18 +75,6 @@ export class Context<
 
   get registry(): Registry {
     return this.#registry;
-  }
-
-  get handler(): Handler<State, Spec> {
-    return this.#handler;
-  }
-
-  get request(): WrappedRequest {
-    return this.#request;
-  }
-
-  get response(): WrappedResponse {
-    return this.#response;
   }
 
   get payload(): ActionPayload<Spec> {

@@ -1,8 +1,9 @@
+import type { HTTPWriter } from "./writer.ts";
 import type { Registry } from '../registry.ts';
 import type { Scope } from "../scopes.ts";
 import type { ContextState, ActionSpec } from "./spec.ts";
 import type { Context } from "./context.ts";
-import type { IncomingMessage, OutgoingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 
 export type HandlerMeta = Map<symbol | string, string | string[]>;
@@ -59,7 +60,7 @@ export type HandleNodeHTTPRequestArgs = {
   language?: string;
   encoding?: string;
   req: IncomingMessage;
-  res: OutgoingMessage;
+  res: ServerResponse;
   writer: HTTPWriter;
 };
 
