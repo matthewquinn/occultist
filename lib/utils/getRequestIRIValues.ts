@@ -1,7 +1,7 @@
 import { STATUS_CODE } from "@std/http/status";
-import type { DefinedAction } from "../action.ts";
+import type { ImplementedAction } from "../actions/types.ts";
 import { ProblemDetailsError } from "../errors.ts";
-import type { ActionSpec, ContextState, FileSingleSpec, FileMultiSpec, BooleanSingleSpec, BooleanMultiSpec, NumberSingleSpec, NumberMultiSpec, StringSingleSpec, StringMultiSpec, ParsedIRIValues, ActionCompatibility, PropertySpec } from "../types.ts";
+import type { ActionSpec, ContextState, FileSingleSpec, FileMultiSpec, BooleanSingleSpec, BooleanMultiSpec, NumberSingleSpec, NumberMultiSpec, StringSingleSpec, StringMultiSpec, ParsedIRIValues, PropertySpec } from "../actions/spec.ts";
 import { getParamLocation } from "./getParamLocation.ts";
 
 
@@ -32,30 +32,20 @@ export type RequestIRIResult<
 };
 
 export function getRequestIRIValues<
-  Term extends string = string,
-  Compatibility extends ActionCompatibility = ActionCompatibility,
   State extends ContextState = ContextState,
   Spec extends ActionSpec<ContextState> = ActionSpec<ContextState>,
-  OriginalState extends ContextState = ContextState,
 >({
   iri,
   action,
 }: {
   iri: string;
-  action: DefinedAction<
-    Term,
-    Compatibility,
-    State,
-    Spec,
-    OriginalState
-  >;
+  action: ImplementedAction<State, Spec>;
 }): RequestIRIResult<Spec> {
   const pathValues: ParsedIRIValues = {};
   const queryValues: ParsedIRIValues = {};
   // deno-lint-ignore no-explicit-any
   const iriValues = {} as IRIValue<any>;
-
-  const urlPatternResult = action.urlPattern.exec(iri);
+  const urlPatternResult = action.pattern.exec(iri);
   const pathParams = urlPatternResult?.pathname.groups || {};
   const searchParams = new URL(iri).searchParams;
 
@@ -85,7 +75,7 @@ export function getRequestIRIValues<
     let value: string | string[] | undefined | null;
     const valueName = specItem.valueName;
     const multipleValues = Boolean(specItem.multipleValues);
-    const paramLocation = getParamLocation(valueName, action.urlPattern);
+    const paramLocation = getParamLocation(valueName, action.pattern);
 
     if (paramLocation === 'path') {
       value = pathParams[valueName];

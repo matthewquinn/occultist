@@ -13,97 +13,30 @@ const paramsRe = /((?<s>[^\{\}]+)|({(?<t>[\?\#])?(?<v>[^}]+)}))/g
  */
 export class Path {
   #rootIRI: string;
-  #pathTemplate: string;
+  #template: string;
   #pattern: URLPattern;
+  #normalized: string;
   #paramKeys: Set<string> = new Set();
   #queryKeys: Set<string> = new Set();
   #fragmentKeys: Set<string> = new Set();
 
-  constructor(pathTemplate: string, rootIRI: string) {
-    this.#pathTemplate = pathTemplate;
+  constructor(template: string, rootIRI: string) {
+    this.#template = template;
     this.#rootIRI = rootIRI;
 
-    let pattern: string = '';
-    
-    // assign values to key location sets for quick querying
-    let match: RegExpExecArray | null;
-    let foundQueryOrFragment = false;
-    let index = 0;
-    while ((match = paramsRe.exec(this.#pathTemplate))) {
-      const segment = match.groups?.s;
-      const type = match.groups?.t;
-      const value = match.groups?.v;
-
-      if (type != null) {
-        foundQueryOrFragment = true;
-      }
-
-      if (!foundQueryOrFragment && segment != null && type == null) {
-        pattern += segment;
-      }
-      
-      if (value == null) {
-        continue;
-      }
-
-      if (!foundQueryOrFragment && value != null) {
-        index++;
-        pattern += `:value${index}`;
-      }
-
-      const set = type == null
-        ? this.#paramKeys
-        : type === '?'
-        ? this.#queryKeys
-        : this.#fragmentKeys;
-
-      const keys = value.split(',');
-      
-      for (let index = 0; index < keys.length; index++) {
-        set.add(keys[index]);
-      }
-    }
-
-    this.#pattern = makeURLPattern(pattern, this.#rootIRI);
+    [this.#pattern, this.#normalized] = this.#makePatterns()
   }
 
-  static normalizePath(path: string): string {
-    const paramsRe = /((?<s>[^\{\}]+)|({(?<t>[\?\#])?(?<v>[^}]+)}))/g
-    let pattern: string = '';
-    
-    // assign values to key location sets for quick querying
-    let match: RegExpExecArray | null;
-    let foundQueryOrFragment = false;
-    let index = 0;
-
-    while ((match = paramsRe.exec(path))) {
-      const segment = match.groups?.s;
-      const type = match.groups?.t;
-      const value = match.groups?.v;
-
-      if (type != null) {
-        foundQueryOrFragment = true;
-      }
-
-      if (!foundQueryOrFragment && segment != null && type == null) {
-        pattern += segment;
-      }
-      
-      if (value == null) {
-        continue;
-      }
-
-      if (!foundQueryOrFragment && value != null) {
-        index++;
-        pattern += `:value${index}`;
-      }
-    }
-
-    return pattern;
+  get template(): string {
+    return this.#template;
   }
 
-  get pattern() {
+  get pattern(): URLPattern {
     return this.#pattern;
+  }
+
+  get normalized(): string {
+    return this.#normalized;
   }
 
   /**
@@ -121,4 +54,46 @@ export class Path {
 
     return null;
   }
+
+  #makePatterns(): [URLPattern, string] {
+    const paramsRe = /((?<s>[^\{\}]+)|({(?<t>[\?\#])?(?<v>[^}]+)}))/g
+    let pattern: string = '';
+    let normalized: string = '';
+    
+    // assign values to key location sets for quick querying
+    let match: RegExpExecArray | null;
+    let foundQueryOrFragment = false;
+    let index = 0;
+
+    while ((match = paramsRe.exec(this.#template))) {
+      const segment = match.groups?.s;
+      const type = match.groups?.t;
+      const value = match.groups?.v;
+
+      if (type != null) {
+        foundQueryOrFragment = true;
+      }
+
+      if (!foundQueryOrFragment && segment != null && type == null) {
+        normalized += segment;
+        pattern += segment;
+      }
+      
+      if (value == null) {
+        continue;
+      }
+
+      if (!foundQueryOrFragment && value != null) {
+        index++;
+        pattern += `:${value}`;
+        normalized += `:value${index}`;
+      }
+    }
+
+    return [
+      makeURLPattern(pattern, this.#rootIRI),
+      normalized,
+    ];
+  }
+  
 }

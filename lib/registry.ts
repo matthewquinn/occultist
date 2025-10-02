@@ -191,11 +191,11 @@ export class Registry implements Callable {
     for (let index = 0; index < this.#children.length; index++) {
       const meta = this.#children[index];
       const method = meta.method;
-      const normalizePath = Path.normalizePath(meta.pathTemplate);
+      const normalized = meta.path.normalized;
 
       meta.finalize();
 
-      const group = groupedMeta.get(normalizePath);
+      const group = groupedMeta.get(normalized);
       const methodSet = group?.get(method);
 
       if (methodSet != null) {
@@ -203,16 +203,16 @@ export class Registry implements Callable {
       } else if (group != null) {
         group.set(method, [meta]);
       } else {
-        groupedMeta.set(normalizePath, new Map([[method, [meta]]]));
+        groupedMeta.set(normalized, new Map([[method, [meta]]]));
       }
     }
 
-    for (const [normalizePath, methodSet] of groupedMeta.entries()) {
+    for (const [normalized, methodSet] of groupedMeta.entries()) {
       for (const [method, meta] of methodSet.entries()) {
         const actionSet = new ActionSet(
           this.#rootIRI,
           method,
-          normalizePath,
+          normalized,
           meta,
         );
 

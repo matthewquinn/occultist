@@ -1,13 +1,14 @@
 import { STATUS_CODE } from "@std/http/status";
-import { type PostAction, type TypedAction, ContentType } from "../action.ts";
 import { ProblemDetailsError } from "../errors.ts";
 import type { JSONValue, ContextDefinition, JSONObject } from "../jsonld.ts";
-import type { FileInput, ActionCompatibility, ContextState, ActionSpec, PropertySpec } from "../types.ts";
+import type { ContextState, ActionSpec, PropertySpec } from "../actions/spec.ts";
 import { streamParts } from '@sv2dev/multipart-stream';
 import jsonld from 'jsonld';
+import type { ImplementedAction } from "../actions/types.ts";
 
 
-export type BodyValue = Record<string, FileInput | FileInput[] | JSONValue>;
+// export type BodyValue = Record<string, FileInput | FileInput[] | JSONValue>;
+export type BodyValue = Record<string, JSONValue>;
 
 
 export type RequestBodyResult = {
@@ -15,27 +16,16 @@ export type RequestBodyResult = {
 };
 
 export async function getRequestBodyValues<
-  // deno-lint-ignore no-explicit-any
-  Term extends string = any,
-  Compatibility extends ActionCompatibility = ActionCompatibility,
   State extends ContextState = ContextState,
   Spec extends ActionSpec<ContextState> = ActionSpec<ContextState>,
-  OriginalState extends ContextState = ContextState,
 >({
   req,
   action,
 }: {
   req: Request,
-  action:
-    | PostAction<Term, Compatibility, State, Spec, OriginalState>
-    | TypedAction<Term, Compatibility, State, Spec, OriginalState>;
+  action: ImplementedAction<State, Spec>,
 }): Promise<RequestBodyResult> {
   let bodyValues: BodyValue = {};
-
-  if (!['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase())) {
-    return { bodyValues: {} };
-  }
-
   const contentType = req.headers.get('content-type');
   const mappedTypes: Record<string, {
     term: string;
@@ -51,7 +41,7 @@ export async function getRequestBodyValues<
       };
     }, {});
 
-  if (contentType?.startsWith(ContentType.MultipartFormData)) {
+  if (contentType?.startsWith('multipart/form-data')) {
     // multipart should be sent using expanded types which get normalized
     // into the compact terms for each type.
     // otherwise json requests would need to also need to use
@@ -67,7 +57,7 @@ export async function getRequestBodyValues<
       let term: string | undefined;
       let propertySpec: PropertySpec | undefined;
 
-      if (part.type && !part.type.startsWith(ContentType.TextPlain)) {
+      if (part.type && !part.type.startsWith('text/plain')) {
         term = mappedTypes[part.name].term;
         propertySpec = mappedTypes[part.name].propertySpec;
 
@@ -81,11 +71,12 @@ export async function getRequestBodyValues<
           });
         }
 
-        bodyValues[term] = part;
+        //bodyValues[term] = part;
+        bodyValues[term] = null;
         continue;
       }
 
-      if (part.type === ContentType.TextPlain || !part.type) {
+      if (part.type === 'text/plain' || !part.type) {
         term = mappedTypes[part.name].term;
         propertySpec = mappedTypes[part.name].propertySpec;
       } else if (part.filename) {
@@ -115,7 +106,7 @@ export async function getRequestBodyValues<
         bodyValues[term] = textValue;
       }
     }
-  } else if (contentType?.startsWith(ContentType.ApplicationJSON)) {
+  } else if (contentType?.startsWith('application/json')) {
     try {
       bodyValues = await req.json();
     } catch {
@@ -123,7 +114,7 @@ export async function getRequestBodyValues<
         title: 'Failed to parse JSON body',
       });
     }
-  } else if (contentType?.startsWith(ContentType.ApplicationJSONLD)) {
+  } else if (contentType?.startsWith('application/ld+json')) {
     let source: JSONValue;
     let expanded: jsonld.JsonLdDocument;
     let compacted: jsonld.NodeObject | undefined;

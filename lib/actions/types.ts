@@ -4,6 +4,7 @@ import type { Scope } from "../scopes.ts";
 import type { ContextState, ActionSpec } from "./spec.ts";
 import type { Context } from "./context.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { JSONObject } from "../jsonld.ts";
 
 
 export type HandlerMeta = Map<symbol | string, string | string[]>;
@@ -73,14 +74,17 @@ export interface ImplementedAction<
   State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,
 > {
+  readonly strict: boolean;
   readonly method: string;
   readonly name: string;
-  readonly path: string;
+  readonly pattern: URLPattern;
+  readonly template: string;
   readonly spec: Spec;
   readonly registry: Registry;
   readonly scope?: Scope;
   readonly handlers: Handler<State, Spec>[];
   readonly contentTypes: string[];
+  readonly context: JSONObject;
 
   url(): string;
   handleRequest(args: HandleRequestArgs): Promise<Response | ServerResponse>;

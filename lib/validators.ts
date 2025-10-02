@@ -46,9 +46,22 @@ export function failsTypeRequirement(
   value: JSONValue | FileInput,
   specValue: PropertySpec,
 ) {
-  if (isNil(specValue.dataType)) {
+  const dataType = specValue.dataType;
+
+  if (dataType == null) {
     return false;
   } else if (specValue.dataType === 'file' && isFileData(value)) {
+    return false;
+  } else if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index++) {
+      const item = value[index];
+      
+      // deno-lint-ignore valid-typeof
+      if (typeof item !== dataType) {
+        return true;
+      }
+    }
+
     return false;
   }
 

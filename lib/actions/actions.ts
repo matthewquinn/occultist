@@ -1,10 +1,13 @@
-import type { Handler, HandlerFn, HandlerMeta, HintArgs, ImplementedAction } from './types.ts';
+import type { Handler, HandleRequestArgs, HandlerFn, HandlerMeta, HintArgs, ImplementedAction } from './types.ts';
 import type { Registry } from '../registry.ts';
 import type { Scope } from "../scopes.ts";
 import type { CacheArgs } from '../cache/cache.ts';
 import type { ContextState, ActionSpec } from "./spec.ts";
 import type { ActionMeta } from "./meta.ts";
 import { Context } from './context.ts';
+import { processAction } from "../processAction.ts";
+import { Path } from "./path.ts";
+import { JSONObject } from "../jsonld.ts";
 
 export type TransformerFn = () => void;
 export type DefineArgs<
@@ -59,6 +62,8 @@ export class FinalizedAction<
   ) {
     this.#spec = spec;
     this.#meta = meta;
+
+    this.#meta.action = this;
 
     const handlers: Map<string, Handler<State, Spec, ImplementedAction<State, Spec>>> = new Map();
 
@@ -134,8 +139,12 @@ export class FinalizedAction<
     return this.#meta.name;
   }
 
-  get path(): string {
-    return this.#meta.pathTemplate;
+  get template(): string {
+    return this.#meta.uriTemplate;
+  }
+
+  get pattern(): URLPattern {
+    return this.#meta.path.pattern;
   }
 
   get spec(): Spec {
@@ -156,6 +165,10 @@ export class FinalizedAction<
 
   get contentTypes(): string[] {
     return Array.from(this.#handlers.keys());
+  }
+
+  get context(): JSONObject {
+    return {};
   }
  
   url(): string {
@@ -215,11 +228,22 @@ export class FinalizedAction<
   }
 
   async handleRequest(args: HandleRequestArgs) {
-    const handler = this.#handlers.get(args.contentType) as Handler<State, Spec>;
+    const handler = this.#handlers.get(args.contentType as string) as Handler<State, Spec>;
+    const { params, query, payload } = await processAction<State, Spec>({
+      iri: args.req.url,
+      req: args.req,
+      spec: this.#spec,
+      state: {} as State,
+      action: this as unknown as ImplementedAction<State, Spec>,
+    });
+
     const context = new Context({
       url: args.req.url,
       public: this.#meta.allowsPublicAccess,
       handler,
+      params,
+      query,
+      payload,
     });
 
     await handler.handler(context);
@@ -252,6 +276,8 @@ export class DefinedAction<
   ) {
     this.#spec = spec;
     this.#meta = meta;
+
+    this.#meta.action = this as unknown as ImplementedAction<State, Spec>;
   }
 
   get method(): string {
@@ -315,14 +341,8 @@ export class DefinedAction<
     );
   }
 
-  async handleRequest(args: HandleRequestArgs) {
-    const context = new Context({
-
-    })
-    await args.writer.writeHead(200);
-    await args.writer.writeBody('hello 2');
-
-    return args.res;
+  async handleRequest(_args: HandleRequestArgs) {
+    throw new Error('Not implemented');
   }
 }
 
@@ -340,6 +360,8 @@ export class Action<
     meta: ActionMeta<State>,
   ) {
     this.#meta = meta;
+
+    this.#meta.action = this;
   }
 
   get method(): string {
@@ -385,9 +407,9 @@ export class Action<
   define<
     Spec extends ActionSpec = ActionSpec,
   >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
-    return this.#meta.action = new DefinedAction<State, Spec>(
+    return new DefinedAction<State, Spec>(
       args.spec,
-      this.#meta as ActionMeta<State, Spec>,
+      this.#meta as unknown as ActionMeta<State, Spec>,
     );
   }
 
@@ -395,7 +417,7 @@ export class Action<
     arg1: string | string[] | HandlerArgs<State>,
     arg2?: HandlerFn<State>,
   ): FinalizedAction<State> {
-    return this.#meta.action = FinalizedAction.fromHandlers(
+    return FinalizedAction.fromHandlers(
       this.#spec,
       this.#meta,
       arg1 as string,
@@ -403,11 +425,8 @@ export class Action<
     );
   }
 
-  async handleRequest(args: HandleRequestArgs) {
-    await args.writer.writeHead(200);
-    await args.writer.writeBody('hello 3');
-
-    return args.res;
+  async handleRequest(_args: HandleRequestArgs) {
+    throw new Error('Not implemented');
   }
 }
 
@@ -436,7 +455,7 @@ export class PreAction<
   >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
     return new DefinedAction<State, Spec>(
       args.spec,
-      this.#meta as ActionMeta<State, Spec>,
+      this.#meta as unknown as ActionMeta<State, Spec>,
     );
   }
 
@@ -444,7 +463,7 @@ export class PreAction<
     arg1: string | string[] | HandlerArgs<State>,
     arg2?: HandlerFn<State>,
   ): FinalizedAction<State> {
-    return this.#meta.action = FinalizedAction.fromHandlers(
+    return FinalizedAction.fromHandlers(
       {},
       this.#meta,
       arg1 as string,
@@ -511,7 +530,7 @@ export class Endpoint<
   define<
     Spec extends ActionSpec = ActionSpec,
   >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
-    return this.#meta.action = new DefinedAction<State, Spec>(
+    return new DefinedAction<State, Spec>(
       args.spec,
       this.#meta as ActionMeta<State, Spec>,
     );
@@ -521,7 +540,7 @@ export class Endpoint<
     arg1: string | string[] | HandlerArgs<State>,
     arg2?: HandlerFn<State>,
   ): FinalizedAction<State> {
-    return this.#meta.action = FinalizedAction.fromHandlers(
+    return FinalizedAction.fromHandlers(
       {},
       this.#meta,
       arg1 as string,

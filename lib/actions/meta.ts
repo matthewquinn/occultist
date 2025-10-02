@@ -2,7 +2,7 @@ import type { Registry } from '../registry.ts';
 import type { HintArgs, ImplementedAction } from './types.ts';
 import type { ContextState, ActionSpec } from './spec.ts';
 import type { Scope } from "../scopes.ts";
-import type { Path } from "./path.ts";
+import { Path } from "./path.ts";
 import type { HTTPWriter } from "./writer.ts";
 
 export type TransformerFn = () => void;
@@ -14,8 +14,8 @@ export class ActionMeta<
   rootIRI: string;
   method: string;
   name: string;
-  pathTemplate: string;
-  path?: Path;
+  uriTemplate: string;
+  path: Path;
   hints: HintArgs[] = [];
   transformers: Map<string, TransformerFn> = new Map();
   scope?: Scope;
@@ -29,7 +29,7 @@ export class ActionMeta<
     rootIRI: string,
     method: string,
     name: string,
-    pathTemplate: string,
+    uriTemplate: string,
     registry: Registry,
     writer: HTTPWriter,
     scope?: Scope,
@@ -37,10 +37,11 @@ export class ActionMeta<
     this.rootIRI = rootIRI;
     this.method = method;
     this.name = name;
-    this.pathTemplate = pathTemplate;
+    this.uriTemplate = uriTemplate;
     this.registry = registry;
     this.writer = writer;
     this.scope = scope;
+    this.path = new Path(uriTemplate, rootIRI);
   }
 
   /**

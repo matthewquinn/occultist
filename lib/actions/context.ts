@@ -3,6 +3,7 @@ import type { Handler, ImplementedAction } from "./types.ts";
 import type { Registry } from "../registry.ts";
 import type { JSONValue } from "../jsonld.ts";
 import type { ActionSpec, ContextState, ObjectSpec, ObjectArraySpec, PropertySpecResult } from "./spec.ts";
+import { ParsedIRIValues } from "../types.ts";
 
 
 export type ActionPayload<
@@ -26,6 +27,9 @@ export type ContextArgs<
   public: boolean;
   authKey?: string;
   handler: Handler<State, Spec>;
+  params?: ParsedIRIValues;
+  query?: ParsedIRIValues;
+  payload?: ActionPayload<Spec>;
 };
 
 export class Context<
@@ -44,6 +48,9 @@ export class Context<
   #state: State = new Map() as State;
   #action: ImplementedAction<State, Spec>;
   #registry: Registry;
+  #params?: ParsedIRIValues;
+  #query?: ParsedIRIValues;
+  #payload?: ActionPayload<Spec>;
 
   constructor(args: ContextArgs<State, Spec>) {
     this.#url = args.url;
@@ -51,6 +58,9 @@ export class Context<
     this.#authKey = args.authKey;
     this.#action = args.handler.action;
     this.#registry = args.handler.registry;
+    this.#params = args.params;
+    this.#query = args.query;
+    this.#payload = args.payload;
   }
 
   get public(): boolean {
@@ -77,8 +87,8 @@ export class Context<
     return this.#registry;
   }
 
-  get payload(): ActionPayload<Spec> {
-    throw new Error('Not defined');
+  get payload(): ActionPayload<Spec> | undefined {
+    return this.#payload;
   }
 
 }

@@ -1,8 +1,7 @@
 import { JsonPointer } from 'json-ptr';
 import { STATUS_CODE } from "@std/http/status";
-import type { DefinedAction } from "./action.ts";
 import type { JSONValue } from "./jsonld.ts";
-import type { ActionCompatibility, ContextState, ActionSpec, ParsedIRIValues, ActionPayload, ValueSpec, ArraySpec, ObjectSpec, ObjectArraySpec, PropertySpec, SpecValue } from "./types.ts";
+// import type { ActionSpec, ParsedIRIValues, ActionPayload, ValueSpec, ArraySpec, ObjectSpec, ObjectArraySpec, PropertySpec, SpecValue } from "./types.ts";
 import { getInternalName } from "./utils/getInternalName.ts";
 import { type BodyValue, getRequestBodyValues } from "./utils/getRequestBodyValues.ts";
 import { type IRIValue, getRequestIRIValues } from "./utils/getRequestIRIValues.ts";
@@ -13,25 +12,21 @@ import { type ProblemDetailsParamsRefs, makeAppendProblemDetails } from "./utils
 import { failsRequiredRequirement, failsTypeRequirement, failsContentTypeRequirement, failsMaxValue, failsMinValue, failValueMinLength, failValueMaxLength, failsStepValue, failsPatternValue, failsValidator, isObjectArraySpec, isObjectSpec, isArraySpec } from "./validators.ts";
 import { InvalidActionParamsError, ProblemDetailsError } from "./errors.ts";
 import { alwaysArray } from "./utils/alwaysArray.ts";
+import type { ImplementedAction } from "./actions/types.ts";
+import type { ActionPayload, ActionSpec, ArraySpec, ContextState, ObjectArraySpec, ObjectSpec, ParsedIRIValues, PropertySpec, SpecValue, ValueSpec } from "./actions/spec.ts";
+
+
 
 
 export type ProcessActionArgs<
-  Term extends string = string,
-  Compatibility extends ActionCompatibility = ActionCompatibility,
   State extends ContextState = ContextState,
   Spec extends ActionSpec<ContextState> = ActionSpec<ContextState>,
-  OriginalState extends ContextState = ContextState,
 > = {
   iri: string;
   req: Request;
-  action: DefinedAction<
-    Term,
-    Compatibility,
-    State,
-    Spec,
-    OriginalState
-  >;
+  spec: Spec,
   state: State;
+  action: ImplementedAction<State, Spec>;
 };
 
 export type ProcessActionResult<
@@ -43,25 +38,16 @@ export type ProcessActionResult<
 };
 
 export async function processAction<
-  Term extends string = string,
-  Compatibility extends ActionCompatibility = ActionCompatibility,
   State extends ContextState = ContextState,
   Spec extends ActionSpec<ContextState> = ActionSpec<ContextState>,
-  OriginalState extends ContextState = ContextState,
 >({
   iri,
   req,
-  action,
+  spec,
   state,
-}: ProcessActionArgs<
-  Term,
-  Compatibility,
-  State,
-  Spec,
-  OriginalState
->): Promise<ProcessActionResult> {
+  action,
+}: ProcessActionArgs<State, Spec>): Promise<ProcessActionResult> {
   let httpStatus: number | null = null;
-  const spec = action.spec;
   const payload: Partial<ActionPayload<Spec>> = {};
   const transformers: Record<string, Promise<unknown>> = {};
   const refs: ProblemDetailsParamsRefs = {};
@@ -73,7 +59,7 @@ export async function processAction<
   let bodyValues: BodyValue;
 
   {
-    const result = await getRequestIRIValues({ iri, action });
+    const result = getRequestIRIValues({ iri, action });
 
     params = result.pathValues;
     query = result.queryValues;
@@ -86,8 +72,7 @@ export async function processAction<
     bodyValues = result.bodyValues;
   }
 
-  const mergedValues = Object.assign({}, bodyValues, iriValues);
-
+  const mergedValues = Object.assign(Object.create(null), bodyValues, iriValues);
 
   function hasRequiredFields(
     specObject: Record<
@@ -318,6 +303,7 @@ export async function processAction<
     }
 
     if (failsTypeRequirement(parentValue, specValue)) {
+      throw new Error('Nope');
       appendProblemDetailsParam({
         param: {
           name: paramName,
