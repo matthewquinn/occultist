@@ -1,3 +1,4 @@
+import { joinPaths } from "./action.ts";
 import { ActionAuth } from "./actions/actions.ts";
 import { ActionMeta } from "./actions/meta.ts";
 import type { Handler, ImplementedAction } from "./actions/types.ts";
@@ -11,6 +12,7 @@ export class Scope implements Callable {
   #writer: HTTPWriter;
   #http: HTTP;
   #children: Array<ActionMeta> = [];
+  #public: boolean = true;
   
   constructor(
     path: string,
@@ -52,10 +54,14 @@ export class Scope implements Callable {
   }
 
   public(): Scope {
+    this.#public = true;
+
     return this;
   }
 
   private(): Scope {
+    this.#public = false;
+
     return this;
   }
 
@@ -80,6 +86,95 @@ export class Scope implements Callable {
     this.#children.push(meta);
     
     return new ActionAuth(meta);
+  }
+  
+  url(): string {
+    return joinPaths(this.#registry.rootIRI, this.#path);
+  }
+  
+  /**
+   * Returns a action for requests against the scope endpoint.
+   * This endpoint can be used by clients to view all actions
+   * defined on this scope, often for building requests which
+   * can deep-link into the API.
+   */
+  scopeAction(): ImplementedAction {
+    const partials = {
+      '@id': this.url(),
+      '@container': '@type',
+    };
+
+    for (let index = 0; index < this.#children.length; index++) {
+      const meta = this.#children[index];
+      const action = meta.action;
+
+      if (action == null || action.type == null) {
+        continue;
+      }
+
+      const partial = action.jsonldPartial();
+
+      if (partial == null) {
+        continue;
+      }
+
+      partials[partial['@type']] = partial;
+    }
+
+    if (this.#public) {
+      return this.#registry.http.get('scope', this.#path)
+        .public()
+        .handle('application/ld+json', (ctx) => {
+          ctx.body = JSON.stringify(partials);
+        }) as ImplementedAction;
+    }
+    return this.#registry.http.get('scope', this.#path)
+      .public()
+      .handle('application/ld+json', (ctx) => {
+          ctx.body = JSON.stringify(partials);
+      }) as ImplementedAction;
+  }
+
+  scopeChildActions(): ImplementedAction[] {
+    const actions: ImplementedAction[] = [];
+    
+    for (let index = 0; index < this.#children.length; index++) {
+      const action = this.#children[index].action;
+
+      if (action == null || action.type == null) {
+        continue;
+      }
+
+      const jsonld = action.jsonld();
+
+      if (jsonld == null) {
+        continue;
+      }
+
+      if (this.#public) {
+        actions.push(
+          this.#registry.http.get(
+            'scope-action', 
+            joinPaths(this.url(), action.name),
+          ).public()
+          .handle('application/ld+json', (ctx) => {
+            ctx.body = JSON.stringify(jsonld);
+          }) as ImplementedAction
+        );
+      } else {
+        actions.push(
+          this.#registry.http.get(
+            'scope-action', 
+            joinPaths(this.url(), action.name),
+          ).private()
+          .handle('application/ld+json', (ctx) => {
+            ctx.body = JSON.stringify(jsonld);
+          }) as ImplementedAction
+        );
+      }
+    }
+
+    return actions;
   }
 }
 

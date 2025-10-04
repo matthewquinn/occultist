@@ -2,15 +2,19 @@ import { ServerResponse } from 'node:http';
 import type { HintLink, HintArgs } from './types.ts';
 
 
-export interface HTTPWriter<T> {
+export type ResponseTypes =
+  | ServerResponse
+  | Response
+;
+
+export interface HTTPWriter<T = unknown> {
   writeEarlyHints(args: HintArgs): void;
   writeHead(status: number, headers?: Headers): void;
   writeBody(body: ReadableStream): void;
   response(): T;
 };
 
-export class FetchResponseWriter implements HTTPWriter<ServerResponse | Response> {
-
+export class FetchResponseWriter implements HTTPWriter<ResponseTypes> {
   #res?: ServerResponse;
   #hints?: {
     link: string | string[];

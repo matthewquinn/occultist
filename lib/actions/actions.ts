@@ -6,7 +6,8 @@ import type { ContextState, ActionSpec } from "./spec.ts";
 import type { ActionMeta } from "./meta.ts";
 import { Context } from './context.ts';
 import { processAction } from "../processAction.ts";
-import type { JSONObject } from "../jsonld.ts";
+import type { JSONObject, TypeDef } from "../jsonld.ts";
+import { joinPaths } from "../action.ts";
 
 export type TransformerFn = () => void;
 export type DefineArgs<
@@ -52,6 +53,7 @@ export class FinalizedAction<
 {
   #spec: Spec;
   #meta: ActionMeta<State, Spec>;
+  #typeDef?: TypeDef;
   #handlers: Map<string, Handler<State, Spec, ImplementedAction<State, Spec>>>;
 
   constructor(
@@ -133,6 +135,18 @@ export class FinalizedAction<
   get method(): string {
     return this.#meta.method;
   }
+  
+  get term(): string | undefined {
+    return this.#typeDef?.term;
+  }
+
+  get type(): string | undefined {
+    return this.#typeDef?.type;
+  }
+
+  get typeDef(): TypeDef | undefined {
+    return this.#typeDef;
+  }
 
   get name(): string {
     return this.#meta.name;
@@ -172,6 +186,34 @@ export class FinalizedAction<
  
   url(): string {
     return '';
+  }
+
+  jsonld(): JSONObject | null {
+    const scope = this.#meta.scope;
+    const typeDef = this.#typeDef;
+
+    if (scope == null || typeDef == null) {
+      return null;
+    }
+    
+    return {
+      '@type': typeDef.type,
+      '@id': joinPaths(scope.url(), this.#meta.name),
+    };
+  }
+
+  jsonldPartial(): { '@type': string, '@id': string } | null {
+    const scope = this.#meta.scope;
+    const typeDef = this.#typeDef;
+
+    if (scope == null || typeDef == null) {
+      return null;
+    }
+    
+    return {
+      '@type': typeDef.type,
+      '@id': joinPaths(scope.url(), this.#meta.name),
+    };
   }
 
   handle(
@@ -268,6 +310,7 @@ export class DefinedAction<
 {
   #spec: Spec;
   #meta: ActionMeta<State, Spec>;
+  #typeDef?: TypeDef;
 
   constructor(
     spec: Spec,
@@ -282,13 +325,25 @@ export class DefinedAction<
   get method(): string {
     return this.#meta.method;
   }
+  
+  get term(): string | undefined {
+    return this.#typeDef?.term;
+  }
+
+  get type(): string | undefined {
+    return this.#typeDef?.type;
+  }
+
+  get typeDef(): TypeDef | undefined {
+    return this.#typeDef;
+  }
 
   get name(): string {
     return this.#meta.name;
   }
 
   get path(): string {
-    return this.#meta.pathTemplate;
+    return this.#meta.path.normalized;
   }
 
   get spec(): Spec {
@@ -313,6 +368,34 @@ export class DefinedAction<
  
   url(): string {
     return '';
+  }
+
+  jsonld(): JSONObject | null {
+    const scope = this.#meta.scope;
+    const typeDef = this.#typeDef;
+
+    if (scope == null || typeDef == null) {
+      return null;
+    }
+    
+    return {
+      '@type': typeDef.type,
+      '@id': joinPaths(scope.url(), this.#meta.name),
+    };
+  }
+
+  jsonldPartial(): { '@type': string, '@id': string } | null {
+    const scope = this.#meta.scope;
+    const typeDef = this.#typeDef;
+
+    if (scope == null || typeDef == null) {
+      return null;
+    }
+    
+    return {
+      '@type': typeDef.type,
+      '@id': joinPaths(scope.url(), this.#meta.name),
+    };
   }
 
   use(): DefinedAction<State, Spec> {
@@ -366,13 +449,25 @@ export class Action<
   get method(): string {
     return this.#meta.method;
   }
+  
+  get term(): string | undefined {
+    return;
+  }
+
+  get type(): string | undefined {
+    return;
+  }
+
+  get typeDef(): TypeDef | undefined {
+    return;
+  }
 
   get name(): string {
     return this.#meta.name;
   }
 
   get path(): string {
-    return this.#meta.pathTemplate;
+    return this.#meta.path.normalized;
   }
 
   get spec(): ActionSpec {
@@ -397,6 +492,14 @@ export class Action<
 
   url(): string {
     return '';
+  }
+
+  jsonld(): JSONObject | null {
+    return null;
+  }
+
+  jsonldPartial(): { '@type': string, '@id': string } | null {
+    return null;
   }
 
   use(): Action<State> {
