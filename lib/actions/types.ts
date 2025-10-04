@@ -74,7 +74,6 @@ export interface ImplementedAction<
   State extends ContextState = ContextState,
   Spec extends ActionSpec = ActionSpec,
 > {
-  readonly strict: boolean;
   readonly method: string;
   readonly name: string;
   readonly pattern: URLPattern;

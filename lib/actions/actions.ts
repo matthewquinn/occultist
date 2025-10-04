@@ -6,8 +6,7 @@ import type { ContextState, ActionSpec } from "./spec.ts";
 import type { ActionMeta } from "./meta.ts";
 import { Context } from './context.ts';
 import { processAction } from "../processAction.ts";
-import { Path } from "./path.ts";
-import { JSONObject } from "../jsonld.ts";
+import type { JSONObject } from "../jsonld.ts";
 
 export type TransformerFn = () => void;
 export type DefineArgs<
