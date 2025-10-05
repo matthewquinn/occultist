@@ -94,7 +94,6 @@ export class Scope implements Callable {
 
   finalize(): void {
     const partials = {
-      '@context': {},
       '@id': this.url(),
       '@container': '@type',
     };
@@ -107,7 +106,6 @@ export class Scope implements Callable {
         continue;
       }
 
-      const vocab = action.typeDef.contextDefinition;
       const partial = action.jsonldPartial();
 
       if (partial == null) {
