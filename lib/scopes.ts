@@ -91,15 +91,10 @@ export class Scope implements Callable {
   url(): string {
     return joinPaths(this.#registry.rootIRI, this.#path);
   }
-  
-  /**
-   * Returns a action for requests against the scope endpoint.
-   * This endpoint can be used by clients to view all actions
-   * defined on this scope, often for building requests which
-   * can deep-link into the API.
-   */
-  scopeAction(): ImplementedAction {
+
+  finalize(): void {
     const partials = {
+      '@context': {},
       '@id': this.url(),
       '@container': '@type',
     };
@@ -112,6 +107,7 @@ export class Scope implements Callable {
         continue;
       }
 
+      const vocab = action.typeDef.contextDefinition;
       const partial = action.jsonldPartial();
 
       if (partial == null) {
@@ -122,21 +118,18 @@ export class Scope implements Callable {
     }
 
     if (this.#public) {
-      return this.#registry.http.get('scope', this.#path)
+      this.#registry.http.get('scope', this.#path)
         .public()
         .handle('application/ld+json', (ctx) => {
           ctx.body = JSON.stringify(partials);
-        }) as ImplementedAction;
+        });
+    } else {
+      this.#registry.http.get('scope', this.#path)
+        .public()
+        .handle('application/ld+json', (ctx) => {
+            ctx.body = JSON.stringify(partials);
+         });
     }
-    return this.#registry.http.get('scope', this.#path)
-      .public()
-      .handle('application/ld+json', (ctx) => {
-          ctx.body = JSON.stringify(partials);
-      }) as ImplementedAction;
-  }
-
-  scopeChildActions(): ImplementedAction[] {
-    const actions: ImplementedAction[] = [];
     
     for (let index = 0; index < this.#children.length; index++) {
       const action = this.#children[index].action;
@@ -145,36 +138,20 @@ export class Scope implements Callable {
         continue;
       }
 
-      const jsonld = action.jsonld();
-
-      if (jsonld == null) {
-        continue;
-      }
-
       if (this.#public) {
-        actions.push(
-          this.#registry.http.get(
-            'scope-action', 
-            joinPaths(this.url(), action.name),
-          ).public()
-          .handle('application/ld+json', (ctx) => {
-            ctx.body = JSON.stringify(jsonld);
-          }) as ImplementedAction
-        );
+        this.#registry.http.get('scope-action', joinPaths(this.url(), action.name))
+          .public()
+          .handle('application/ld+json', async (ctx) => {
+            ctx.body = JSON.stringify(await action.jsonld());
+          });
       } else {
-        actions.push(
-          this.#registry.http.get(
-            'scope-action', 
-            joinPaths(this.url(), action.name),
-          ).private()
-          .handle('application/ld+json', (ctx) => {
-            ctx.body = JSON.stringify(jsonld);
-          }) as ImplementedAction
-        );
+        this.#registry.http.get('scope-action', joinPaths(this.url(), action.name))
+          .private()
+          .handle('application/ld+json', async (ctx) => {
+            ctx.body = JSON.stringify(await action.jsonld());
+          });
       }
     }
-
-    return actions;
   }
 }
 

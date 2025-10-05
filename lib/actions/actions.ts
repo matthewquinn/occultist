@@ -6,14 +6,18 @@ import type { ContextState, ActionSpec } from "./spec.ts";
 import type { ActionMeta } from "./meta.ts";
 import { Context } from './context.ts';
 import { processAction } from "../processAction.ts";
-import type { JSONObject, TypeDef } from "../jsonld.ts";
+import type { JSONLDContext, JSONObject, TypeDef } from "../jsonld.ts";
 import { joinPaths } from "../action.ts";
+import { getPropertyValueSpecifications } from "../utils/getPropertyValueSpecifications.ts";
+import { getActionContext } from "../utils/getActionContext.ts";
 
 export type TransformerFn = () => void;
 export type DefineArgs<
+  Term extends string = string,
   Spec extends ActionSpec = ActionSpec,
 > = {
-  spec: Spec,
+  typeDef?: TypeDef<Term>
+  spec: Spec;
 };
 
 export type HandlerArgs<
@@ -302,9 +306,10 @@ export interface Applicable<ActionType> {
 
 export class DefinedAction<
   State extends ContextState = ContextState,
+  Term extends string = string,
   Spec extends ActionSpec = ActionSpec,
 > implements
-  Applicable<DefinedAction<State, Spec>>,
+  Applicable<DefinedAction<State, Term, Spec>>,
   Handleable<State, Spec>,
   ImplementedAction<State, Spec>
 {
@@ -315,9 +320,11 @@ export class DefinedAction<
   constructor(
     spec: Spec,
     meta: ActionMeta<State, Spec>,
+    typeDef: TypeDef,
   ) {
     this.#spec = spec;
     this.#meta = meta;
+    this.#typeDef = typeDef;
 
     this.#meta.action = this as unknown as ImplementedAction<State, Spec>;
   }
@@ -370,17 +377,34 @@ export class DefinedAction<
     return '';
   }
 
-  jsonld(): JSONObject | null {
+  get context(): JSONLDContext {
+    return getActionContext({
+      spec: this.#spec,
+      // vocab: this.#vocab,
+      // aliases: this.#aliases,
+    });
+  }
+
+  async jsonld(): Promise<JSONObject | null> {
     const scope = this.#meta.scope;
     const typeDef = this.#typeDef;
 
     if (scope == null || typeDef == null) {
       return null;
     }
-    
+    const apiSpec = await getPropertyValueSpecifications(this.#spec);
+
     return {
-      '@type': typeDef.type,
-      '@id': joinPaths(scope.url(), this.#meta.name),
+      '@context': this.context,
+      '@id': joinPaths(this.#meta.rootIRI, scope.path, this.name),
+      '@type': this.term,
+      target: {
+        '@type': 'https://schema.org/EntryPoint',
+        httpMethod: this.method,
+        urlTemplate: this.#meta.path.template,
+        contentType: 'application/ld+json',
+      },
+      ...apiSpec,
     };
   }
 
@@ -398,7 +422,7 @@ export class DefinedAction<
     };
   }
 
-  use(): DefinedAction<State, Spec> {
+  use(): DefinedAction<State, string, Spec> {
     return this;
   }
 
@@ -451,15 +475,15 @@ export class Action<
   }
   
   get term(): string | undefined {
-    return;
+    return undefined;
   }
 
   get type(): string | undefined {
-    return;
+    return undefined;
   }
 
   get typeDef(): TypeDef | undefined {
-    return;
+    return undefined;
   }
 
   get name(): string {
@@ -507,11 +531,13 @@ export class Action<
   }
 
   define<
+    Term extends string = string,
     Spec extends ActionSpec = ActionSpec,
-  >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
-    return new DefinedAction<State, Spec>(
+  >(args: DefineArgs<Term, Spec>): DefinedAction<State, Term, Spec> {
+    return new DefinedAction<State, Term, Spec>(
       args.spec,
       this.#meta as unknown as ActionMeta<State, Spec>,
+      args.typeDef,
     );
   }
 
@@ -553,11 +579,13 @@ export class PreAction<
   }
 
   define<
+    Term extends string = string,
     Spec extends ActionSpec = ActionSpec,
-  >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
-    return new DefinedAction<State, Spec>(
+  >(args: DefineArgs<Term, Spec>): DefinedAction<State, Term, Spec> {
+    return new DefinedAction<State, Term, Spec>(
       args.spec,
       this.#meta as unknown as ActionMeta<State, Spec>,
+      args.typeDef,
     );
   }
 
@@ -630,11 +658,13 @@ export class Endpoint<
   }
 
   define<
+    Term extends string = string,
     Spec extends ActionSpec = ActionSpec,
-  >(args: DefineArgs<Spec>): DefinedAction<State, Spec> {
-    return new DefinedAction<State, Spec>(
+  >(args: DefineArgs<Term, Spec>): DefinedAction<State, Term, Spec> {
+    return new DefinedAction<State, Term, Spec>(
       args.spec,
       this.#meta as ActionMeta<State, Spec>,
+      args.typeDef,
     );
   }
 

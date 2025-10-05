@@ -101,7 +101,7 @@ export interface ImplementedAction<
    * Returns an object which could be serialized to json
    * representing this action.
    */
-  jsonld(): JSONObject | null;
+  jsonld(): Promise<JSONObject | null>;
 
   /**
    * Creates a partial objecting containing the `@type` and `@id`
