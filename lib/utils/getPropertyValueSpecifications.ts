@@ -1,5 +1,5 @@
 import type { OrArray, JSONValue } from "../jsonld.ts";
-import type { ActionSpec, PropertySpec, ResponseInputSpec, SpecValue, ActionOption } from "../types.ts";
+import type { ActionSpec, PropertySpec, ResponseInputSpec, SpecValue, ActionOption } from "../actions/spec.ts";
 import { isNil } from "./isNil.ts";
 import { isObject } from "./isObject.ts";
 
@@ -24,6 +24,9 @@ export async function getPropertyValueSpecifications(spec: ActionSpec<any>) {
       valueName: propertySpec.valueName,
       valueRequired: propertySpec.valueRequired,
       multipleValues: propertySpec.multipleValues,
+      valueMinLength: propertySpec.valueMinLength,
+      valueMaxLength: propertySpec.valueMaxLength,
+      valuePatern: propertySpec.valuePattern,
     };
 
     if (typeof propertySpec.options === 'function') {

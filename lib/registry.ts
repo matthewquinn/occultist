@@ -2,7 +2,6 @@ import { Accept } from "./accept.ts";
 import { ActionAuth } from "./actions/actions.ts";
 import { type ActionMatchResult, ActionSet } from "./actions/actionSets.ts";
 import { ActionMeta } from "./actions/meta.ts";
-import { Path } from "./actions/path.ts";
 import type { Handler, ImplementedAction } from "./actions/types.ts";
 import { FetchResponseWriter } from "./actions/writer.ts";
 import { Scope } from './scopes.ts';
@@ -95,6 +94,7 @@ export class Registry implements Callable {
   #scopes: Scope[] = [];
   #children: ActionMeta[] = [];
   //#extensions: Map<string, string> = new Map();
+  #scopeIndex?: IndexEntry;
   #index?: IndexEntry;
   #writer = new FetchResponseWriter();
 
@@ -188,6 +188,12 @@ export class Registry implements Callable {
     const actionSets: ActionSet[] = [];
     const groupedMeta = new Map<string, Map<string, ActionMeta[]>>();
 
+    for (let index = 0; index < this.#scopes.length; index++) {
+      const scope = this.#scopes[index];
+      
+      scope.finalize();
+    }
+
     for (let index = 0; index < this.#children.length; index++) {
       const meta = this.#children[index];
       const method = meta.method;
@@ -221,18 +227,6 @@ export class Registry implements Callable {
     }
 
     this.#index = new IndexEntry(actionSets);
-  }
-
-  describeRoutes(): string {
-    let description = '';
-
-    for (const action of this.actions) {
-      for (const contentType of action.contentTypes) {
-        description += `${contentType} ${action.method} ${action.path}`;
-      }
-    }
-
-    return description;
   }
 
   handleRequest(
@@ -274,5 +268,5 @@ export class Registry implements Callable {
 
     throw new Error('Not implemented');
   }
-  
-}
+
+ }
