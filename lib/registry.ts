@@ -8,8 +8,6 @@ import { Scope } from './scopes.ts';
 import { IncomingMessage, type ServerResponse } from "node:http";
 
 
-export type ExtensionMap = Record<string, string>;
-
 export interface Callable {
   method(method: string, name: string, path: string): ActionAuth;
 }
@@ -285,11 +283,11 @@ export class Registry implements Callable {
     throw new Error('Not implemented');
   }
 
-  addEventListener(type: `on${RegistryEvents}`, callback: EventListener) {
+  addEventListener(type: RegistryEvents, callback: EventListener) {
     this.#eventTarget.addEventListener(type, callback);
   };
 
-  removeEventListener(type: `on${RegistryEvents}`, callback: EventListener) {
+  removeEventListener(type: RegistryEvents, callback: EventListener) {
     this.#eventTarget.removeEventListener(type, callback)
   }
 

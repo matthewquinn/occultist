@@ -1,23 +1,9 @@
 import type { ReadStream } from "node:fs";
 import type { Handler, ImplementedAction } from "./types.ts";
 import type { Registry } from "../registry.ts";
-import type { JSONValue } from "../jsonld.ts";
-import type { ActionSpec, ContextState, ObjectSpec, ObjectArraySpec, PropertySpecResult } from "./spec.ts";
-import { ParsedIRIValues } from "../types.ts";
+import type { ActionSpec, ContextState, ActionPayload } from "./spec.ts";
+import type { ParsedIRIValues } from "../types.ts";
 
-
-export type ActionPayload<
-  Spec extends ActionSpec = ActionSpec,
-> = {
-  [
-    Term in keyof Spec as Spec[Term] extends { internalTerm: string }
-      ? Spec[Term]['internalTerm']
-      : Term
-  ]: Spec[Term] extends ObjectArraySpec
-    ? Array<ActionPayload<Spec[Term]['properties']>>
-    : Spec[Term] extends ObjectSpec ? ActionPayload<Spec[Term]['properties']>
-    : PropertySpecResult<Spec[Term]>;
-};
 
 export type ContextArgs<
   State extends ContextState = ContextState,

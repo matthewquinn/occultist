@@ -1,11 +1,9 @@
 import type { Registry } from '../registry.ts';
 import type { HintArgs, ImplementedAction } from './types.ts';
-import type { ContextState, ActionSpec } from './spec.ts';
+import type { ContextState, ActionSpec, TransformerFn } from './spec.ts';
 import type { Scope } from "../scopes.ts";
 import { Path } from "./path.ts";
 import type { HTTPWriter } from "./writer.ts";
-
-export type TransformerFn = () => void;
 
 export class ActionMeta<
   State extends ContextState = ContextState,

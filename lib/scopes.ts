@@ -3,7 +3,6 @@ import { ActionAuth } from "./actions/actions.ts";
 import { ActionMeta } from "./actions/meta.ts";
 import type { Handler, ImplementedAction } from "./actions/types.ts";
 import type { HTTPWriter } from "./actions/writer.ts";
-import { ActionMatchResult } from "@occultist/occultist";
 import { type Callable, HTTP, type Registry } from './registry.ts';
 
 

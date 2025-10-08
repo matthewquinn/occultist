@@ -42,10 +42,6 @@ export type HintArgs = {
   csp?: string;
 };
 
-export type Middleware = () => void | Promise<void>;
-
-export type DefinedMiddleware = () => void | Promise<void>;
-
 export type HandleFetchRequestArgs = {
   type: 'request';
   contentType?: string;

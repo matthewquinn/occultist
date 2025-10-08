@@ -160,3 +160,15 @@ test('It handles request payloads for application/json requests', async () => {
   assert(body.baz[0] === 'foo');
 });
 
+test('It fires beforefinalize and after finalize events', { only: true }, () => {
+  const called: string[] = [];
+  const registry = new Registry({ rootIRI: 'https://example.com' });
+
+  registry.addEventListener('beforefinalize', () => called.push('beforefinalize'));
+  registry.addEventListener('afterfinalize', () => called.push('afterfinalize'))
+  registry.finalize();
+
+  assert(called[0] === 'beforefinalize');
+  assert(called[1] === 'afterfinalize');
+});
+
