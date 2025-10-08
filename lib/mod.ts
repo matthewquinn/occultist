@@ -1,6 +1,13 @@
-export type * from './types.ts';
-export * from './transformers/fileTransformer.ts';
-export * from './action.ts';
+//export type * from './types.ts';
+//export * from './transformers/fileTransformer.ts';
+export * from './actions/types.ts';
+export * from './actions/meta.ts';
+export * from './actions/spec.ts';
+export * from './actions/context.ts';
+export * from './actions/path.ts';
+export * from './actions/actions.ts';
+export * from './actions/actionSets.ts';
 export * from './registry.ts';
 export * from './makeTypeDefs.ts';
 export * from './utils/contextBuilder.ts';
+export { joinPaths } from './action.ts';

@@ -13,16 +13,19 @@ export class Scope implements Callable {
   #http: HTTP;
   #children: Array<ActionMeta> = [];
   #public: boolean = true;
+  #propergateMeta: (meta: ActionMeta) => void;
   
   constructor(
     path: string,
     registry: Registry,
     writer: HTTPWriter,
+    propergateMeta: (meta: ActionMeta) => void,
   ) {
     this.#path = path;
     this.#registry = registry;
     this.#writer = writer;
     this.#http = new HTTP(this);
+    this.#propergateMeta = propergateMeta;
   }
 
   get path(): string {
@@ -84,6 +87,7 @@ export class Scope implements Callable {
     );
 
     this.#children.push(meta);
+    this.#propergateMeta(meta);
     
     return new ActionAuth(meta);
   }

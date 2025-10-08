@@ -8,8 +8,6 @@ import { Scope } from './scopes.ts';
 import { IncomingMessage, type ServerResponse } from "node:http";
 
 
-export type ExtensionMap = Record<string, string>;
-
 export interface Callable {
   method(method: string, name: string, path: string): ActionAuth;
 }
@@ -82,6 +80,12 @@ export class IndexEntry {
   }
 }
 
+
+export type RegistryEvents =
+  | 'beforefinalize'
+  | 'afterfinalize'
+;
+
 export type RegistryArgs = {
   rootIRI: string;
 };
@@ -93,10 +97,9 @@ export class Registry implements Callable {
   #http: HTTP;
   #scopes: Scope[] = [];
   #children: ActionMeta[] = [];
-  //#extensions: Map<string, string> = new Map();
-  #scopeIndex?: IndexEntry;
   #index?: IndexEntry;
   #writer = new FetchResponseWriter();
+  #eventTarget = new EventTarget();
 
   constructor(args: RegistryArgs) {
     const url = new URL(args.rootIRI);
@@ -111,13 +114,14 @@ export class Registry implements Callable {
       path,
       this,
       this.#writer,
+      (meta) => this.#children.push(meta),
     );
 
     this.#scopes.push(scope);
     
     return scope;
   }
-  
+
   get rootIRI(): string {
     return this.#rootIRI;
   }
@@ -188,6 +192,10 @@ export class Registry implements Callable {
     const actionSets: ActionSet[] = [];
     const groupedMeta = new Map<string, Map<string, ActionMeta[]>>();
 
+    this.#eventTarget.dispatchEvent(
+      new Event('beforefinalize', { bubbles: true, cancelable: false })
+    );
+
     for (let index = 0; index < this.#scopes.length; index++) {
       const scope = this.#scopes[index];
       
@@ -227,6 +235,9 @@ export class Registry implements Callable {
     }
 
     this.#index = new IndexEntry(actionSets);
+    this.#eventTarget.dispatchEvent(
+      new Event('afterfinalize', { bubbles: true, cancelable: false })
+    );
   }
 
   handleRequest(
@@ -243,9 +254,12 @@ export class Registry implements Callable {
     res?: ServerResponse,
   ): Promise<Response | ServerResponse> {
     const accept = Accept.from(req);
+    // hack, until a better way to normalize the url is sorted
+    const reqURL = new URL(req.url);
+    const url = new URL(this.#rootIRI + reqURL.pathname)
     const match = this.#index?.match(
       req.method ?? 'GET',
-      req.url ?? '/',
+      url.toString(),
       accept,
     );
 
@@ -267,6 +281,14 @@ export class Registry implements Callable {
     }
 
     throw new Error('Not implemented');
+  }
+
+  addEventListener(type: RegistryEvents, callback: EventListener) {
+    this.#eventTarget.addEventListener(type, callback);
+  };
+
+  removeEventListener(type: RegistryEvents, callback: EventListener) {
+    this.#eventTarget.removeEventListener(type, callback)
   }
 
  }
