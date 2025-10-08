@@ -3,7 +3,7 @@ import type { Registry } from '../registry.ts';
 import type { Scope } from "../scopes.ts";
 import type { CacheArgs } from '../cache/cache.ts';
 import type { ContextState, ActionSpec } from "./spec.ts";
-import type { ActionMeta } from "./meta.ts";
+import type { ActionMeta, TransformerFn } from "./meta.ts";
 import { Context } from './context.ts';
 import { processAction } from "../processAction.ts";
 import type { JSONLDContext, JSONObject, TypeDef } from "../jsonld.ts";
@@ -11,7 +11,6 @@ import { joinPaths } from "../action.ts";
 import { getPropertyValueSpecifications } from "../utils/getPropertyValueSpecifications.ts";
 import { getActionContext } from "../utils/getActionContext.ts";
 
-export type TransformerFn = () => void;
 export type DefineArgs<
   Term extends string = string,
   Spec extends ActionSpec = ActionSpec,
@@ -26,7 +25,7 @@ export type HandlerArgs<
 > = {
   contentType: string | string[];
   handler: HandlerFn<State, Spec>;
-  meta?: Record<symbol | string, string | string[]>;
+  meta?: Record<symbol | string, unknown>;
 };
 
 export type Hints =
@@ -291,7 +290,9 @@ export class FinalizedAction<
       payload,
     });
 
+    context.headers.set('Content-Type', args.contentType);
     await handler.handler(context);
+    context.headers.set('Content-Type', args.contentType);
 
     args.writer.writeHead(context.status ?? 200, context.headers);
     args.writer.writeBody(context.body);
